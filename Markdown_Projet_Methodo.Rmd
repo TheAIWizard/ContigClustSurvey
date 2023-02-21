@@ -1,0 +1,258 @@
+---
+title: "Agrégation géographique avec contrainte de contiguïté"
+author: "Rym Boulassel, Pierre Le Maux , Nathan Randriamanana"
+date: "2023-02-21"
+output: html_document
+---
+
+Le code qui suit présente une proposition d'implémentation d'une agrégation géographique avec contrainte de contiguïté prenant en compte un critère d'arrêt sur la taille du nombre de répondants d'une enquête pour chaque agrégat, lors du processus d'agrégation.
+
+Ce code pouvant très bien s'adapter sur des données réelles est effectué sur des données simulées pour éprouver les possibilités de notre approche. La forme des données simulées permet de saisir le format attendu sur les données réelles pour une éventuelle application. Ce projet ne propose pas une mise en production mais une proposition méthodologique de l'implémentation d'une telle méthode.
+
+## Import des packages
+
+```{r setup, results = FALSE}
+library(ggplot2) # package pour affichage graphique de la grille
+library(dplyr) # package pour manipuler les données
+library(igraph) # package pour la manipulation de graphe
+```
+
+# Simulation des communes : génération de carrés aléatoires
+
+## Paramétrage de la grille de carrés
+
+```{r}
+#dimension de l'espace géographique simulé
+x_max <- 20
+y_max <- 20
+# génération de données aléatoires pour les points
+n <- 500 # nombre de points de données
+n_squares <- 25 # nombre total de carrés
+
+nb_cols_squares <- 5 # nombre de colonnes de carrés
+#découper les coordonnées en carrés de taille 4x4 (square_side_length=4)
+square_side_length <- 4 # longueur des côtés d'un carré
+```
+
+## Génération des individus et de la grille
+
+### Génération des individus et données de contexte
+
+On génère d'abord des individus aléatoirement dans le plan et générant au hasard des couples (x,y)
+représentant les individus.
+
+Pour pouvoir observer les mêmes individus à chaque fois que l'on souhaite recommencer la simulation,
+on fixe ce qu'on appelle une graine d'aléatoire.
+
+```{r}
+set.seed(123) # fixer la graine d'aléatoire pour obtenir les mêmes résultats aléatoires à chaque exécution
+```
+
+Nous générons ensuite nos individus selon une loi uniforme dont les données sont gardées dans un tableau.
+
+```{r}
+# génération aléatoire d'individus dans le plan
+df <- data.frame(x = runif(n, 0, x_max),
+                 y = runif(n, 0, y_max))
+
+```
+
+Nous générons les données de contexte des communes i.e une valeur aléatoire est affectée à chaque commune (carré) de notre simulation
+
+```{r}
+# génération des données de contexte
+square_values <- runif(n_squares, 0, 1) # valeurs aléatoires pour chaque carré
+```
+
+Bien que cela ne soit pas utile dans notre étude, nous pouvons générer une valeur aléatoire pour chaque individu (point) qui représente une donnée individuelle pouvant être une donnée d'enquête
+
+```{r}
+#générer une valeur aléatoire pour chaque point (individu d'enquête) dans les coordonnées
+df$survey_value <- runif(n, 0, 1)
+```
+
+```{r}
+#résumer et afficher un tableau de synthèse de ces données
+summary(df)
+```
+
+### Génération de la grille 
+
+Nous découpons le plan en fonction de la longueur des côtés de chaque carré et la dimension du plan.
+Il faut donc dans la partie "Paramétrage de la grille de carrés", choisir des dimensions cohérentes à la situation que l'on souhaite modéliser.
+
+```{r}
+#la fonction cut sert à découper les coordonnées en intervalles de taille prédéterminée
+#la fonction seq sert à générer une séquence d'éléments dans un ordre donné
+df$x_bin <- cut(df$x, breaks = seq(0, x_max, by = square_side_length), labels = FALSE)
+df$y_bin <- cut(df$y, breaks = seq(0,y_max, by = square_side_length), labels = FALSE)
+
+# Assignation d'un numéro ou indice à chaque carré. Ex: carré n°1 est le carré le plus haut à gauche
+# en numérotant les carrés, l'identifiant de chaque carré s'obtient à partir des coordonnées x_bin et y_bin (expression modulo)
+df$square_id <- df$x_bin + nb_cols_squares * (df$y_bin-1) #petite réflexion mathématique
+#ex: le carré n°6 se déduit avec x_bin=1,y_bin=2 par 6=1+2(5) on se déplace de 1 à droite et sachant qu'il faut se deplacer de 5 pas à droite avant d'arriver en bas, on s'est déplacé 2 cases en bas.
+```
+
+Nous raisonnons aussi sur les numéros que l'on donne aux communes. La convention que nous avons choisie est de numéroter les carrés de gauche à droite et de haut en bas.
+
+Exemple pour une grille de 25 carrés de dimension 4x4 dans un plan de dimension 20x20:
+![unchanged image](survey_data_square_with_ID.png)
+
+Pour un individu, x_bin correspond à la colonne de carré correspondante.
+y_bin correspond à la ligne de carré correspondante.
+
+Par exemple, un individu à la position (x=6,y=7) se trouve dans la deuxième colonne de carré (x_bin=2) car un carré a un côté de longueur 4 et dans la deuxième ligne de carré (y_bin=2). En observant la grille, cela correspond au carré n°7.
+
+![unchanged image](Screenshot 2023-02-21 at 17-02-20 RStudio Server.png)
+
+Chaque carré ayant un identifiant, nous pouvons lui affecter une donnée de contexte.
+
+```{r}
+#Ajout de la colonne correspondant à la valeur de chaque carré
+df$square_value <- square_values[df$square_id]
+```
+
+La grille est donc bien modélisée selon le tableau suivant :
+
+```{r}
+head(df)
+```
+
+Voici à quoi pourrait typiquement ressembler les données sur lesquelles on souhaiterait appliquer une agrégation géographique avec contrainte de contiguïté.
+
+# Représentation graphique de notre grille
+
+```{r ,echo=FALSE,include=FALSE} 
+p_numerote <- ggplot(df, aes(x, y)) +
+  geom_bin2d(bins = n_squares) +
+  coord_fixed(ratio = 1) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  scale_y_reverse() +
+  theme(plot.background = element_rect(fill = "white"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_line(color = "black",size = square_side_length/x_max,linetype = 1),
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "cm")) +
+  # numérotation des carrés
+  geom_text(aes(x = (x_bin - 0.5) * square_side_length, 
+                y = (y_bin - 0.5) * square_side_length,
+                label = square_id, size=6), 
+            color = "red", 
+            size = 5,
+            family = "sans",
+            hjust = 0.5,
+            vjust = 0.5)
+
+# Enregistrement du graphique en tant qu'image
+ggsave("survey_data_square_with_ID.png", plot = p_numerote, width = n_squares, height = n_squares,limitsize = FALSE)
+#Affichage de la grille
+p_numerote
+```
+
+# Mise en forme du tableau : Traitement des données simulées pour être fournies en entrée à notre algorithme d'agrégation
+
+Nous renommons et filtrons les variables pertinentes pour une meilleure compréhension dans le contexte du problème. Nous n'avons besoin que des données des contexte et les identifiants des communes. Il nous reste le nombre de répondants à l'enquête par commune.
+
+```{r}
+#Restitution du tableau final qui va être utilisé
+df$coords <- paste(df$x, df$y, sep = ",")
+#Filtrer les données et renommer les colonnes
+donnees <- dplyr::select(df,square_value,square_id)
+colnames(donnees) <- c("donnee_contexte_commune", "square_ID")
+```
+
+Pour avoir le nombre de répondants à l'enquête dans chaque commune, nous agrégons les données individuelles à l'échelle des communes.
+
+```{r, echo = FALSE, results='asis', comment=NA, warning=FALSE, message=FALSE}
+# Fonction pour agréger les données individuelles et avoir le nombre de répondants par commune 
+agg_indiv_to_communes <- function(data)
+{data %>% group_by(square_ID,donnee_contexte_commune) %>% summarize(nb_repondants_commune = n())
+}
+donnees_agg <- agg_indiv_to_communes(donnees)
+donnees_agg <- donnees_agg %>%rename(ID=square_ID)
+```
+
+Les données sont fin prêtes pour l'agrégation.
+
+```{r}
+head(donnees_agg)
+```
+
+# Codification de la structure de voisinage
+
+Il est important de définir la notion de voisinage car elle diffère selon le type que l'on a choisie.
+Les deux types de voisinages les plus usuels sont la contiguïté "QUEEN" et "ROOK", analogue au possibilité de déplacement des pièces correspondantes aux jeux d'échecs.
+
+![unchanged image](contiguite.png)
+
+En pratique, il faut renseigner les voisins à la main. Dans le cadre d'une grille de commune, il est possible d'écrire un algorithme pour définir une structure de voisinage en raisonnant sur les identifiants des communes.
+En utilisant des considérations arithmétiques et en traitant les cas particuliers (carrés sur les bords gauche et droite), il est possible d'écrire cela pour notre grille 25x25.
+
+
+## Création de la matrice de contiguïté
+
+Nous créons deux fonctions codant les deux différents types de voisinage. Pour la suite, nous appliquerons la contiguité ROOK i.e il ne suffit pas qu'elles partagent un point de frontière commune pour que deux communes soient voisines.
+
+Choisir le type de contiguïté revient de manière équivalente à choisir une certaine distance à appliquer entre deux indices de carré dans une grille (ou un damier) et de ne garder que les voisins directs i.e qui n'ont qu'une distance de 1 avec le carré considéré.
+
+Exemple: avec la distance de Tchebychev, les voisins directs du roi ont une distance de 1 et on ne retient qu ceux-là. La distance de Manhattan donnent les mêmes résultats mais sans les diagonales. Nous implémentons donc ces distances pour créer notre matrice de contiguïté.
+
+![unchanged image](chebychev.png)
+
+Les fonctions implémentées suivantes s'inspirent des distances de Manhattan et de Chebychev entre deux carrés du damier dont les indices sont i et j, sans tenir compte de leur position réelle dans l'espace.
+
+Si l'on souhaite expérimenter d'autres distances plus exotiques, il est possible de les implémenter ci-dessous et de les rajouter dans le code qui suit.
+
+```{r}
+distance_tchebychev_indices=function(i,j){return(max(abs((j-1) %/% n - (i-1) %/% n), abs((j-1) %% n - (i-1) %% n))) }
+distance_manhattan_indices=function(i,j){return(abs((j-1) %/% n - (i-1) %/% n) + abs((j-1) %% n - (i-1) %% n)) }
+```
+
+
+
+```{r}
+create_contig_matrix = function(n, type="Rook"){
+a <- b <- c()
+for (i in 1:(n^2)) {
+  for (j in 1:(n^2)) {
+    ifelse(type=="Rook",diff <- distance_manhattan_indices(i,j),ifelse(type=="Queen",diff <- distance_tchebychev_indices(i,j),"Précisez un type de contiguïté existant: Rook ou Queen") )
+    # la condition diff > 1 permet de filtrer les paires de carrés qui ne sont pas des voisins directs
+    # la condition i >= j permet d'éviter les doublo
+    if (diff > 1 || i >= j) {
+      next
+    } else {
+      a <- c(a, i)
+      b <- c(b, j)
+    }
+  }
+}
+voisin <- cbind(a, b)
+contig_matrix <- as.matrix(voisin)
+return(contig_matrix)
+}
+```
+
+Nous pouvons enfin créer notre matrice de contiguïté
+
+```{r}
+contig_matrix <- create_contig_matrix(n)
+```
+
+
+Si l'on préfère la contiguité Queen, on peut rajouter l'argument "Queen" comme ci-dessous :
+
+```{r,results = FALSE}
+create_contig_matrix(5,"Queen")
+```
+
+# Mise en place de l'agrégation
+
+## Clustering avec contraintes de contiguïté et critère d'arrêt sur les répondants
+
+Nous définissons différentes fonctions utilitaires pour la gestion des contraintes.
+
+
+
