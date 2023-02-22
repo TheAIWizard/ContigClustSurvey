@@ -254,5 +254,47 @@ create_contig_matrix(5,"Queen")
 
 Nous définissons différentes fonctions utilitaires pour la gestion des contraintes.
 
+### Fonctions de contiguïté
+
+Nous créons une fonction qui vérifie si 2 agrégats i et j sont géographiquement voisins selon la matrice de contiguïté que nous avons définie. Chaque agrégat contient plusieurs communes.
+
+```{r}
+groupes_voisins <- function(groups,i,j){ #fonction qui évalue si les agrégats i et j sont voisins
+  res=F
+  for (k in 1:length(contig_matrix[,1])){
+    for (x in groups[[i]]){
+      for (y in groups[[j]]){
+        if((contig_matrix[k,"id1"]==x && contig_matrix[k,"id2"]==y)|(contig_matrix[k,"id1"]==y && contig_matrix[k,"id2"]==x)){
+          res=T
+        }
+      }
+    }
+  }
+  return(res)
+}
+```
+
+
+```{r}
+distance_between_groups <- function(groups,i,j) {
+  # Calcul de la distance entre deux groupes pour la méthode ward.d2
+  # voir "Ward’s Hierarchical Clustering Method:Clustering Criterion and Agglomerative Algorithm"
+  n <- length(groups[[i]]) + length(groups[[j]])
+  # Filtre des valeurs de la variable d'intérêt associés aux ID des clusters 
+  data_group1 <- filter(donnees_agg,ID %in% groups[[i]])$donnee_contexte_commune
+  data_group2 <- filter(donnees_agg,ID %in% groups[[j]])$donnee_contexte_commune
+  mean1 <- mean(data_group1)
+  mean2 <- mean(data_group2)
+  mean_all <- mean(c(mean(data_group1), mean(data_group2)))
+  # Calcul de la somme des carrés des écarts à la moyenne pour chaque groupe
+  ssd1 <- sum((data_group1 - mean1) ^ 2)
+  ssd2 <- sum((data_group2 - mean2) ^ 2)
+  # Calcul de la somme des carrés des écarts à la moyenne pour tous les points
+  ssd_all <- sum((c(data_group1,data_group2) - mean_all) ^ 2)
+  # Calcul de la distance entre deux groupes pour la méthode ward.d2
+  dist_between_groups <- ssd_all - (ssd1 + ssd2)
+  return(sqrt(dist_between_groups / (n)))
+}
+```
 
 
