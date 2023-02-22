@@ -256,7 +256,7 @@ Nous définissons différentes fonctions utilitaires pour la gestion des contrai
 
 ### Fonctions de contiguïté
 
-Nous créons une fonction qui vérifie si 2 agrégats i et j sont géographiquement voisins selon la matrice de contiguïté que nous avons définie. Chaque agrégat contient plusieurs communes.
+Nous créons une fonction qui vérifie si 2 agrégats i et j sont géographiquement voisins selon la matrice de contiguïté que nous avons définie. Chaque agrégat contient plusieurs communes. La convention que nous avons choisie pour dire que 2 agrégats sont voisins est de regarder si au moins une commune d'un agrégat est voisine au minimum avec une commune de l'autre agrégat.
 
 ```{r}
 groupes_voisins <- function(groups,i,j){ #fonction qui évalue si les agrégats i et j sont voisins
@@ -274,6 +274,13 @@ groupes_voisins <- function(groups,i,j){ #fonction qui évalue si les agrégats 
 }
 ```
 
+Plutôt que de définir seulement une fonction de distance entre deux communes, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons que deux communes correspondent à deux agrégats qui contiennent respectivement chacun une unique commune.
+
+Nous souhaitons regrouper les communes qui se ressemblent le plus en terme de données de contexte. Les communes doivent donc être les plus homogènes possibles au sein d'un agrégat et les agrégats doivent être les plus différents possibles. En conséquence, la fonction est donc construite sur les données de contexte associées à chaque commune.
+
+Pour cela, nous choisissons une mesure de similarité très performante pour répondre à notre besoin, et classiquement utilisé pour le clustering hiérarchique (notamment populaire avec le langage R). Il s'agit de la distance de Ward.D2 dont l'implémentation est détaillée dans "Ward’s Hierarchical Clustering Method:Clustering Criterion and Agglomerative Algorithm", Pierre Legendre, Fionn Murtagh.
+
+Pour expliquer brièvement le principe, elle mesure la variance totale de toutes les données à travers tous les agrégats créés par la classification. Elle est calculée en comparant la somme des carrés des distances de chaque point à son centre de gravité dans chaque agrégat. Cette distance mesure ainsi la différence entre la somme des carrés des distances de chaque objet dans le même agrégat et la somme des carrés des distances de chaque objet dans des agrégats différents.
 
 ```{r}
 distance_between_groups <- function(groups,i,j) {
@@ -297,4 +304,9 @@ distance_between_groups <- function(groups,i,j) {
 }
 ```
 
+La mesure de similarité précédente prend en compte des considérations purement statistiques mais comme nous nous trouvons dans le cadre d'un thème précis qui est la classification **géographique**, il est possible voire davantage cohérent de tirer profit d'une pondération des communes. 
+
+Tout comme, il est proposé dans le code proposé par M. Hisnard, "l’utilisateur est évidemment libre de choisir toute autre distance. Il convient de remarquer que le choix de la distance peut influer sur la taille des classe créées, par-là sur le nombre de voisins à chaque itération et donc sur la durée du programme."
+
+Plutôt que la distance de Ward.D2 classique, il peut être intéressant de regarder celle entre deux unités dans un ensemble de données, en prenant en compte une variable pondérée nommée "Poids".
 
