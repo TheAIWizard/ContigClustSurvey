@@ -360,9 +360,11 @@ Nous allons opérer un peu différemment. Notre objectif est de continuer à reg
 ```{r}
 #Nombre maximum de répondants par agrégats
 nb_repondants_max <- 100
-#Fixation de l'écart absolu souhaité pour la stabilisation de l'inertie inter-intra
+#Fixation de l'écart absolu souhaité pour la stabilisation de l'inertie entre l'étape précédente et actuelle
 seuil_inertie <- 0.000001
+#Fixation arbitraire de l'inertie précédente pour amorcer l'algorithme
 inertie_prec = 100000
+#Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 ```
 
@@ -410,6 +412,7 @@ for (i in 1:length(groups)) {
 ## Stockage des différentes inerties et des partitions
 
 À chaque itération, nous allons garder en mémoire l'inertie et la partition associée afin qu'à la convergence de notre algorithme, nous sélectionnons la partition ayant le plus faible rapport d'inertie intra-inter classe
+puisque nous voulons les agrégats les plus homogènes possibles en terme de données de contexte.
 
 ```{r}
 # Initialisation de la liste des inerties inter-intra classes
@@ -420,6 +423,10 @@ liste_groups <- list()
 ```
 
 ## Boucle de l'agrégation géographique avec contrainte de contiguïté et critère d'arrêt sur les répondants à l'enquête
+
+La boucle suivante itère et met à jour les éléments initialisés précédemment. À chaque étape, une matrice de similarité est calculé entre les agrégats. Les indices correspondant au premier élément minimum de la matrice sont stockés et correspondent aux agrégats i et j. 
+
+Nous vérifions ensuite que les agrégats i et j vérifient les contraintes de contiguïté et si le critère d'arrêt n'est pas encore satisfait. Si on peut agréger les 2 agrégats, alors on met à jour la liste des partitions, la matrice de similarité ainsi que la liste des inerties.
 
 ```{r}
 while (!convergence) {
@@ -503,4 +510,99 @@ while (!convergence) {
   inertie_prec = inertie
 }
 ```
+
+Nous récupérons l'indice correspondant au minimum du rapport d'inertie intra-inter classes
+
+```{r}
+# On retourne la plus petite inertie inter-intra classes retenue pour pouvoir la comparer après
+# Récupération de l'indice du minimum d'inertie et des groupes correspondants par la même occasion
+# On prend la première occurence du minimum pour avoir trop de classes inutiles
+min_inertie_donnee_contexte <- min(liste_inertie)
+indice_min_groupes_retenu <- which(liste_inertie == min_inertie_donnee_contexte, arr.ind = TRUE)
+```
+
+À partir de cet indice, nous récupérons la partition correspondant à ce minimum et nous affichons les résultats souhaités
+
+```{r}
+# Résultats finaux
+agregats_donnee_contexte_repondant <- liste_groups[[indice_min_groupes_retenu]]
+print('Les agrégats au niveau des données de contexte retenus sur contrainte des répondants sont :')
+print(agregats_donnee_contexte_repondant)
+cat("Le rapport d'inertie obtenu sur les données de contexte correspondant vaut:", min_inertie_donnee_contexte,"\n")
+```
+
+# Affichage et mise en forme du résultat de l'agrégation
+
+Nous présentons un pseudo-dendrogramme sommaire pour représenter les compositions des agrégats obtenus. Pour avoir un dendrogramme complet il est possible de transformer la partition obtenue en objet hclust et d'utiliser le package approprié mais le gain en terme de visualisation ne nous semblait pas suffisant par rapport au temps dont nous disposions.
+
+```{r,echo=FALSE}
+# Représentation dendrogramme à partir des hauteurs et des clusters (encore à développer)
+# Conversion de dist_mat au bon format pour hclust en remplaçant les valeurs "Inf" par 65536
+dist_mat_hclust <- dist_mat
+dist_mat_hclust[is.infinite(dist_mat)] <- 100000000000000 # les valeurs infinies étant impossibles pour hclust
+# Construire un objet de type dendrogramme
+dend <- hclust(as.dist(dist_mat_hclust))
+# Extraire les clusters de la liste et les rajouter en labels des clusters
+labels(dend) <- lapply(agregats_donnee_contexte_repondant, function(x) x[1:length(x)])
+# Afficher le dendrogramme
+plot(dend)
+```
+
+Comme employé couramment dans les packages de clustering hiérarchique sur R, nous pouvons convertir la représentation de la partition par une liste de vecteurs en un simple vecteur où chaque indice correspond à la commune (ou carré)  et l'élément associé au numéro de l'agrégat auquel il appartient. Cela nous facilitera la tâche pour représenter graphiquement les agrégats obtenus en coloriant les carrés de la grille.
+
+```{r}
+# Résultat final pour représenter graphiquement sur les carrés (ne marche que dans notre cas particulier)
+# Conversion de la liste de vecteurs en une liste résumant l'appartenance à un groupe
+clusters <- lapply(agregats_donnee_contexte_repondant, as.numeric)
+cluster_indices <- rep(NA, max(unlist(clusters)))
+
+# Parcourir chaque vecteur numérique dans la liste "clusters"
+for (i in seq_along(clusters)) {
+  cluster_indices[clusters[[i]]] <- i
+}
+# Afficher la liste d'indices de cluster
+clusters <- cluster_indices 
+clusters
+```
+
+# Ajout du résultat de la classification au tableau de données 
+
+Pour des possibilités de représentation à l'avenir avec d'autres outils, il peut être intéressant de rajouter une colonne aux données référant l'agrégat auquel chaque commune appartient suite à l'agrégation. Il est possible, par exemple, d'utiliser la plateforme de l'Observatoire des Territoires pour choisir un mode de visualisation cartographique des agrégats obtenus.
+
+```{r}
+#Appariement des identifiants des carrés aux clusters
+donnees_agg$cluster <- clusters[donnees_agg$ID]
+```
+
+# Visualisation du résultat
+
+```{r}
+# Fonction pour assigner une couleur en fonction du numéro de carré
+#Cette fonction attribue une couleur différente à chaque cluster en utilisant une palette de couleurs définie
+palette <- c("red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "gray",
+               "darkred", "darkorange", "gold", "darkgreen", "navyblue", "indigo", "violet", "saddlebrown", "darkgray", "silver",
+               "maroon", "tomato", "khaki", "olive", "skyblue", "slategray", "orchid", "sienna", "dimgray", "dimgrey",
+               "crimson", "coral", "lemonchiffon", "limegreen", "cornflowerblue", "mediumorchid", "mediumslateblue", "sienna", "rosybrown", "lightslategray")
+
+# Fonction pour assigner une couleur en fonction du numéro de carré
+color_fun_2 <- function(id) {return(palette[id])}
+
+# Assigner une couleur à chaque carré
+color <- sapply(clusters, color_fun_2)
+# Convertir au bon format pour l'affichage
+color <- as.vector(as.matrix(color)[,1])
+
+df <- data.frame(x_bin = rep(1:5, 5), 
+                 y_bin = rep(5:1, each = 5), 
+                 color = color)
+
+ggplot(df, aes(x = x_bin, y = y_bin, fill = color)) +
+  geom_rect(data = df, aes(xmin = x_bin - 0.5, xmax = x_bin + 0.5,
+                           ymin = y_bin - 0.5, ymax = y_bin + 0.5),fill = df$color)+
+  scale_fill_identity() +
+  coord_cartesian(xlim = c(0, 6), ylim = c(0, 6)) +
+  theme_void() +
+  ggtitle("CAH sur les données de contexte avec contraintes de contiguité et sur le nombre de répondants")
+```
+
 
