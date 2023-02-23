@@ -23,15 +23,14 @@ library(igraph) # package pour la manipulation de graphe
 
 ```{r}
 #dimension de l'espace géographique simulé
-x_max <- 20
-y_max <- 20
-# génération de données aléatoires pour les points
-n <- 500 # nombre de points de données
-n_squares <- 25 # nombre total de carrés
-
-nb_cols_squares <- 5 # nombre de colonnes de carrés
-#découper les coordonnées en carrés de taille 4x4 (square_side_length=4)
-square_side_length <- 4 # longueur des côtés d'un carré
+x_max <- y_max <- 20
+# effectif de la population d'individus à générer
+n <- 500 
+# nombre total de carrés dans la grille
+n_squares <- 25 
+# nombre de colonnes de carrés
+nb_cols_squares <- sqrt(n_squares) 
+square_side_length <- x_max/nb_cols_squares # longueur des côtés d'un carré
 ```
 
 ## Génération des individus et de la grille
@@ -82,6 +81,7 @@ Nous découpons le plan en fonction de la longueur des côtés de chaque carré 
 Il faut donc dans la partie "Paramétrage de la grille de carrés", choisir des dimensions cohérentes à la situation que l'on souhaite modéliser.
 
 ```{r}
+#découper les coordonnées en carrés de taille square_side_lengthxsquare_side_length
 #la fonction cut sert à découper les coordonnées en intervalles de taille prédéterminée
 #la fonction seq sert à générer une séquence d'éléments dans un ordre donné
 df$x_bin <- cut(df$x, breaks = seq(0, x_max, by = square_side_length), labels = FALSE)
@@ -235,17 +235,17 @@ return(contig_matrix)
 }
 ```
 
-Nous pouvons enfin créer notre matrice de contiguïté
+Nous pouvons enfin créer notre matrice de contiguïté. Nous renseignons en argument de la fonction le nombre de carrés que l'on a sur une rangée (ligne ou colonne)
 
 ```{r}
-contig_matrix <- create_contig_matrix(sqrt(n_squares))# si on a 25 communes, on renseigne 5 comme paramètre.
+contig_matrix <- create_contig_matrix(nb_cols_squares)
 ```
 
 
 Si l'on préfère la contiguité Queen, on peut rajouter l'argument "Queen" comme ci-dessous :
 
 ```{r,results = FALSE}
-create_contig_matrix(sqrt(n_squares),"Queen")
+create_contig_matrix(sqrt(nb_cols_squares),"Queen")
 ```
 
 # Mise en place de l'agrégation
@@ -366,7 +366,7 @@ inertie_prec = 100000
 convergence = FALSE
 ```
 
-# Initialisation de la partition
+## Initialisation de la partition
 
 Comme nous avons préféré travailler directement sur une mesure de similarité entre les groupes au lieu d'une fonction de distance entre les communes pour des facilités de généralisation et d'implémentation, nous initialisons la partition en considérant qu'au départ chaque commune est son propre agrégat. L'agrégat 1 comporte la commune "1", ..., l'agrégat n_squares comporte la commune "n_squares". Nous pourrons ainsi directement fusionner les agrégats qui se ressemblent sous contraintes. Nous attribuons aussi un attribut à chaque commune-agrégat pour afficher le nombre de répondants présent dans chaque. 
 
@@ -404,6 +404,103 @@ for (i in 1:length(groups)) {
     }
     
   }
+}
+```
+
+## Stockage des différentes inerties et des partitions
+
+À chaque itération, nous allons garder en mémoire l'inertie et la partition associée afin qu'à la convergence de notre algorithme, nous sélectionnons la partition ayant le plus faible rapport d'inertie intra-inter classe
+
+```{r}
+# Initialisation de la liste des inerties inter-intra classes
+liste_inertie <- c()
+# Initialisation de la liste des listes des groupes pour sélectionner à la fin le groupe
+#correspondant au minimum d'inertie inter-intra
+liste_groups <- list()
+```
+
+## Boucle de l'agrégation géographique avec contrainte de contiguïté et critère d'arrêt sur les répondants à l'enquête
+
+```{r}
+while (!convergence) {
+  
+  # Recherche des groupes les plus proches
+  min_dist <- min(dist_mat)
+  #tableau en 2 colonnes des couples d'indice du minimum
+  min_indices <- which(dist_mat == min_dist, arr.ind = TRUE)
+  i <- min_indices[1,][[1]]
+  j <- min_indices[1,][[2]]
+  
+  #condition 
+  if (groupes_voisins(groups,i,j)){ 
+    #notion de voisinage entre 2 clusters à appliquer ici sur les vecteurs et non des unités
+    # contient les indices de la première occurrence de la commune i dans chaque vecteur de la liste G
+    nb_repondant_agregat <- sum(filter(donnees_agg,ID %in% groups[[i]])$nb_repondants_commune)
+    + sum(filter(donnees_agg,ID %in% groups[[j]])$nb_repondants_commune)
+    if ( nb_repondant_agregat <= nb_repondants_max) { #contrainte de taille sur nombre de répondants
+
+      #ajouter calcul de distance et les voisins dans un des vecteurs de G.
+      # Fusion des groupes
+      new_group <- c(groups[[i]], groups[[j]])  
+      groups[[i]] <- new_group
+      
+      # Stockage de la hauteur de la fusion
+      height <- min_dist / 2
+      
+      # Stockage de la hauteur pour les deux groupes fusionnés
+      attr(new_group, "height") <- height
+      attr(groups[[i]], "height") <- height
+      # Stockage du nombre de répondants pour les deux groupes fusionnés
+      attr(new_group, "nombre_répondants") <- nb_repondant_agregat
+      attr(groups[[i]], "nombres_répondants") <- nb_repondant_agregat
+      cat("Nombre de répondants du cluster actuellement fusionné :",as.character(nb_repondant_agregat),"\n")
+      
+      # Suppression de l'ancien groupe
+      groups <- groups[-j]
+      # Suppression de ce cluster dans la matrice de distance des clusters
+      dist_mat <- dist_mat[-j, -j]
+      # Après cette suppression, i ne correpond plus au cluster designé auparavant réactualisons i
+      i <- match(attr(new_group, "height"), sapply(groups, function(x) attr(x, "height")))
+      
+      #il peut être intéressant de stocker groups  à chaque étape
+      #pour avoir un clustering proposé à chaque étape
+      
+      # Modification de la matrice de distance entre les groupes: nécessaire car les groupes changent 
+      # On modifie la distance du nouveau cluster avec les autres existants
+      # On recalcule la distance entre clusters à la ligne i et colonne i de l
+      
+      #le voisinage change donc aussi pour le nouveau cluster n°i fusionné
+      
+      for (k in 1:ncol(dist_mat)){
+        #avant de recalculer les distances,on vérifie donc encore la contrainte de contiguité 
+        #entre ce nouvel agrégat et les autres pour éviter les caluls inutiles
+        if (groupes_voisins(groups,i,k)){
+          dist_mat[i,k] <- dist_mat[k,i] <- distance_between_groups(groups,i,k)
+        }
+        else{dist_mat[i,k] <- dist_mat[k,i] <- Inf
+        }
+      }
+      #par défaut, on fixe la diagonale à Inf pour ne pas 
+      #associer une commune à elle-même
+      dist_mat[i,i] <- dist_mat[i,i] <- Inf
+      
+        # Calcul de l'inertie inter-intra
+        inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
+        inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
+        inertie = inertie_intra/inertie_inter
+        # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
+        liste_inertie <- append(liste_inertie,inertie)
+        liste_groups[[length(liste_groups) + 1]] <- groups
+        }
+    }
+  # vérification de la convergence
+  if(abs(inertie - inertie_prec) < seuil_inertie) {
+    convergence = TRUE
+    print("CONVERGENCE !!!")
+  }
+  cat("Inertie précédente:",inertie,"Inertie suivante:",inertie_prec,"\n")
+  # mise à jour de la variable d'inertie précédente
+  inertie_prec = inertie
 }
 ```
 
