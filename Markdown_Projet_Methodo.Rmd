@@ -385,7 +385,6 @@ Nous initialisons une matrice de distance entre les agrégats de dimension n_squ
 
 À l'initialisation, la matrice ne renseignera la distance entre 2 communes qui sont voisines et dont la somme de nombre de répondants n'excède pas le seuil de répondants fixé. Une valeur Infinie est donnée pour les autres paires de communes pour éviter d'avoir un minimum de distance en dehors des contraintes de contiguïté et de nombre de répondants puisque de toute façon seules les communes voisines entre-elles nous intéressent. L'idée de rajouter des termes infinis s'inspirent du papier "Hierarchical Clustering with Contiguity Constraint in R" rédigé par Pierre Legendre et Guillaume Guénard.
 
-
 ```{r}
 # Initialisation de la matrice de distance entre les groupes
 dist_mat <- matrix(Inf, nrow = length(groups), ncol = length(groups))
