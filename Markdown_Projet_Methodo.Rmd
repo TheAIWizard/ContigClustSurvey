@@ -254,7 +254,7 @@ create_contig_matrix(5,"Queen")
 
 Nous définissons différentes fonctions utilitaires pour la gestion des contraintes.
 
-### Fonctions de contiguïté
+### Fonction de contiguïté
 
 Nous créons une fonction qui vérifie si 2 agrégats i et j sont géographiquement voisins selon la matrice de contiguïté que nous avons définie. Chaque agrégat contient plusieurs communes. La convention que nous avons choisie pour dire que 2 agrégats sont voisins est de regarder si au moins une commune d'un agrégat est voisine au minimum avec une commune de l'autre agrégat.
 
@@ -273,6 +273,8 @@ groupes_voisins <- function(groups,i,j){ #fonction qui évalue si les agrégats 
   return(res)
 }
 ```
+
+### Fonction de distance entre les agrégats de commune
 
 Plutôt que de définir seulement une fonction de distance entre deux communes, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons que deux communes correspondent à deux agrégats qui contiennent respectivement chacun une unique commune.
 
@@ -308,5 +310,59 @@ La mesure de similarité précédente prend en compte des considérations pureme
 
 Tout comme, il est proposé dans le code proposé par M. Hisnard, "l’utilisateur est évidemment libre de choisir toute autre distance. Il convient de remarquer que le choix de la distance peut influer sur la taille des classe créées, par-là sur le nombre de voisins à chaque itération et donc sur la durée du programme."
 
-Plutôt que la distance de Ward.D2 classique, il peut être intéressant de regarder celle entre deux unités dans un ensemble de données, en prenant en compte une variable pondérée nommée "Poids".
+Plutôt que la distance de Ward.D2 classique, il peut être intéressant de regarder celle entre deux unités dans un ensemble de données, en prenant en compte une variable pondérée nommée "Poids". ( explication d'ajout du terme P1*P2/(P1+P2))
+
+### Fonction de fusion des agrégats.
+
+Comme dans la plupart des packages dédiée au clustering hiérarhique, nous représentons notre partition par une liste de vecteurs. Chaque vecteur contient les identifiants des communes (ex: "1", "2" dans notre cas). Un agrégat est donc modélisé par un vecteur.
+Nous fusionnons donc 2 agrégats en concaténant les identifiants de communes de chaque agrégat dans un nouveau vecteur qui représente le nouvel agrégat et nous supprimons les 2 anciens vecteurs représentant les anciens agrégats.
+
+```{r}
+fusion_between_groups <- function(i,j) {
+  #fusion des groupes
+  groups <- c(groups, list(c(groups[[i]],groups[[j]])))
+  #suppression des anciens groupes ayant servi à la fusion
+  groups <- groups[-c(i, j)]
+}
+```
+
+### Fonction du calcul d'inertie inter-intra au niveau des donnée de contexte.
+
+Pour avoir la partition la plus homogène possible au sein de chaque classe et hétérogène entre les classes, nous définissons une fonction qui calcule les inertie inter et intra-classes d'une partition.
+
+```{r}
+inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
+  K <- length(groups)
+  N <- nrow(data)
+  total_mean <- mean(data$donnee_contexte_commune)
+  
+  inter_group_var <- 0
+  for (i in seq_len(K)) {
+    group_mean <- mean(filter(data, ID %in% groups[[i]])$donnee_contexte_commune)
+    group_size <- nrow(filter(data, ID %in% groups[[i]]))
+    inter_group_var <- inter_group_var + group_size * (group_mean - total_mean)^2
+  }
+  
+  intra_group_var <- sum((data$donnee_contexte_commune - total_mean)^2)
+  
+  return(list(inter = inter_group_var, intra = intra_group_var))
+}
+```
+
+# Initialisation de l'agrégation avec critère d'arrêt sur le nombre de répondants.
+
+## Paramétrage de l'algorithme de clustering
+
+Le principe d'une CAH est de regrouper par paire les voisins qui se ressemblent le plus. Habituellement, il est courant d'arrêter le clustering lorsqu'on obtient plus qu'un seul cluster. Le statisticien choisit ensuite le nombre de clusters en fonction des sorties du dendrogramme et à l'aide d'autres métriques.
+
+Nous allons opérer un peu différemment. Notre objectif est de continuer à regrouper des communes dans un agrégat jusqu'à ce que ce même agrégat atteint un nombre de répondants à l'enquête suffisant soit 100 (choix arbitraire pour commencer). Par conséquent, le partionnement sera fin et il ne sera souvent ni utile ni possible d'obtenir un seul cluster à la fin du processus d'agrégation à cause du critère d'arrêt sur les répondants. Pour que notre algorithme converge, nous optons donc pour une condition de stabilisation de l'inertie, en l'occurence le rapport inertie inter-intra classe.
+
+```{r}
+#Nombre maximum de répondants par agrégats
+nb_repondants_max <- 100
+#Fixation de l'écart absolu souhaité pour la stabilisation de l'inertie inter-intra
+seuil_inertie <- 0.000001
+inertie_prec = 100000
+convergence = FALSE
+```
 
