@@ -96,14 +96,14 @@ df$square_id <- df$x_bin + nb_cols_squares * (df$y_bin-1) #petite réflexion mat
 Nous raisonnons aussi sur les numéros que l'on donne aux communes. La convention que nous avons choisie est de numéroter les carrés de gauche à droite et de haut en bas.
 
 Exemple pour une grille de 25 carrés de dimension 4x4 dans un plan de dimension 20x20:
-![unchanged image](survey_data_square_with_ID.png)
+![unchanged image](Templates/survey_data_square_with_ID.png)
 
 Pour un individu, x_bin correspond à la colonne de carré correspondante.
 y_bin correspond à la ligne de carré correspondante.
 
 Par exemple, un individu à la position (x=6,y=7) se trouve dans la deuxième colonne de carré (x_bin=2) car un carré a un côté de longueur 4 et dans la deuxième ligne de carré (y_bin=2). En observant la grille, cela correspond au carré n°7.
 
-![unchanged image](Screenshot 2023-02-21 at 17-02-20 RStudio Server.png)
+![unchanged image](Templates/Screenshot 2023-02-21 at 17-02-20 RStudio Server.png)
 
 Chaque carré ayant un identifiant, nous pouvons lui affecter une donnée de contexte.
 
@@ -186,7 +186,7 @@ head(donnees_agg)
 Il est important de définir la notion de voisinage car elle diffère selon le type que l'on a choisie.
 Les deux types de voisinages les plus usuels sont la contiguïté "QUEEN" et "ROOK", analogue au possibilité de déplacement des pièces correspondantes aux jeux d'échecs.
 
-![unchanged image](contiguite.png)
+![unchanged image](Templates/contiguite.png)
 
 En pratique, il faut renseigner les voisins à la main. Dans le cadre d'une grille de commune, il est possible d'écrire un algorithme pour définir une structure de voisinage en raisonnant sur les identifiants des communes.
 En utilisant des considérations arithmétiques et en traitant les cas particuliers (carrés sur les bords gauche et droite), il est possible d'écrire cela pour notre grille 25x25.
@@ -200,7 +200,7 @@ Choisir le type de contiguïté revient de manière équivalente à choisir une 
 
 Exemple: avec la distance de Tchebychev, les voisins directs du roi ont une distance de 1 et on ne retient qu ceux-là. La distance de Manhattan donnent les mêmes résultats mais sans les diagonales. Nous implémentons donc ces distances pour créer notre matrice de contiguïté.
 
-![unchanged image](chebychev.png)
+![unchanged image](Templates/chebychev.png)
 
 Les fonctions implémentées suivantes s'inspirent des distances de Manhattan et de Chebychev entre deux carrés du damier dont les indices sont i et j, sans tenir compte de leur position réelle dans l'espace.
 
@@ -364,5 +364,47 @@ nb_repondants_max <- 100
 seuil_inertie <- 0.000001
 inertie_prec = 100000
 convergence = FALSE
+```
+
+# Initialisation de la partition
+
+Comme nous avons préféré travailler directement sur une mesure de similarité entre les groupes au lieu d'une fonction de distance entre les communes pour des facilités de généralisation et d'implémentation, nous initialisons la partition en considérant qu'au départ chaque commune est son propre agrégat. L'agrégat 1 comporte la commune "1", ..., l'agrégat n_squares comporte la commune "n_squares". Nous pourrons ainsi directement fusionner les agrégats qui se ressemblent sous contraintes. Nous attribuons aussi un attribut à chaque commune-agrégat pour afficher le nombre de répondants présent dans chaque. 
+
+L'avantage est que nous n'avons plus maintenant qu'à raisonner sur les agrégats pour la fusion sans se soucier des communes, le travail étant fait.
+
+```{r}
+# Initialisation des groupes
+groups = lapply(1:n_squares, function(x) c(as.character(x)))
+# stockage du nombre de répondants
+for (i in 1:length(groups)){attr(groups[[i]], "nombres_répondants") <- filter(donnees_agg,ID %in% groups[[i]])$nb_repondants_commune}
+for (i in 1:length(groups)){attr(groups[[i]], "height") <- 0}
+head(groups)
+```
+
+Nous initialisons une matrice de distance entre les agrégats de dimension n_squares*n_squares. La taille de la matrice va diminuer au fur et à mesure que le nombre d'agrégats diminue.
+
+À l'initialisation, la matrice ne renseignera la distance entre 2 communes qui sont voisines et dont la somme de nombre de répondants n'excède pas le seuil de répondants fixé. Une valeur Infinie est donnée pour les autres paires de communes pour éviter d'avoir un minimum de distance en dehors des contraintes de contiguïté et de nombre de répondants puisque de toute façon seules les communes voisines entre-elles nous intéressent. L'idée de rajouter des termes infinis s'inspirent du papier "Hierarchical Clustering with Contiguity Constraint in R" rédigé par Pierre Legendre et Guillaume Guénard.
+
+
+```{r}
+# Initialisation de la matrice de distance entre les groupes
+dist_mat <- matrix(Inf, nrow = length(groups), ncol = length(groups))
+for (i in 1:length(groups)) {
+  for (j in i:length(groups)) {
+    if (j>i){
+      #dès la première étape,on exclut d'office du calcul les groupes trop éloignés et trop gros: calcul plus rapide
+      #contrainte contiguite
+      if (groupes_voisins(groups,i,j)){ 
+        #contrainte de taille sur le nombre de répondants par agrégat
+        if (sum(filter(donnees_agg,ID %in% groups[[i]])$nb_repondants_commune)
+            + sum(filter(donnees_agg,ID %in% groups[[j]])$nb_repondants_commune) <= nb_repondants_max) { #contrainte de taille sur nombre de répondants
+          dist_mat[i,j] <- distance_between_groups(groups,i,j)
+          dist_mat[j,i] <- dist_mat[i,j]
+        }
+      }
+    }
+    
+  }
+}
 ```
 
