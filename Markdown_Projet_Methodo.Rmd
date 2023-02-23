@@ -15,6 +15,9 @@ Ce code pouvant très bien s'adapter sur des données réelles est effectué sur
 library(ggplot2) # package pour affichage graphique de la grille
 library(dplyr) # package pour manipuler les données
 library(igraph) # package pour la manipulation de graphe
+# package pour manipulation avancée de dendrogramme
+if(!require(dendextend)) install.packages("dendextend")
+library("dendextend")
 ```
 
 # Simulation des communes : génération de carrés aléatoires
@@ -230,6 +233,12 @@ for (i in 1:(n^2)) {
   }
 }
 voisin <- cbind(a, b)
+colnames(voisin) <- c("id1","id2")
+voisin <- data.frame(voisin)
+#conversion des colonnes en chaine de caracteres
+voisin$id1 <- as.character(voisin$id1)
+voisin$id2 <- as.character(voisin$id2)
+#conversion en tibble pour les fonctions d'aggrégation
 contig_matrix <- as.matrix(voisin)
 return(contig_matrix)
 }
@@ -505,7 +514,7 @@ while (!convergence) {
     convergence = TRUE
     print("CONVERGENCE !!!")
   }
-  cat("Inertie précédente:",inertie,"Inertie suivante:",inertie_prec,"\n")
+  cat("Inertie précédente:",inertie_prec,"Inertie suivante:",inertie,"\n")
   # mise à jour de la variable d'inertie précédente
   inertie_prec = inertie
 }
