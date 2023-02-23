@@ -238,14 +238,14 @@ return(contig_matrix)
 Nous pouvons enfin créer notre matrice de contiguïté
 
 ```{r}
-contig_matrix <- create_contig_matrix(n)
+contig_matrix <- create_contig_matrix(sqrt(n_squares))# si on a 25 communes, on renseigne 5 comme paramètre.
 ```
 
 
 Si l'on préfère la contiguité Queen, on peut rajouter l'argument "Queen" comme ci-dessous :
 
 ```{r,results = FALSE}
-create_contig_matrix(5,"Queen")
+create_contig_matrix(sqrt(n_squares),"Queen")
 ```
 
 # Mise en place de l'agrégation
