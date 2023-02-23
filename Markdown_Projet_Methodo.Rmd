@@ -50,14 +50,43 @@ on fixe ce qu'on appelle une graine d'aléatoire.
 set.seed(123) # fixer la graine d'aléatoire pour obtenir les mêmes résultats aléatoires à chaque exécution
 ```
 
-Nous générons ensuite nos individus selon une loi uniforme dont les données sont gardées dans un tableau.
+Nous pouvons générer nos individus selon une loi uniforme dont les données sont gardées dans un tableau comme ceci: (la cellule suivante ne sera pas exécutée avec "eval = FALSE")
 
-```{r}
+```{r ,eval = FALSE}
 # génération aléatoire d'individus dans le plan
 df <- data.frame(x = runif(n, 0, x_max),
                  y = runif(n, 0, y_max))
 
 ```
+
+Or, pour simuler la réalité, il est souhaitable d'avoir d'une forte concentration sur plusieurs parties de la grille comme pour les métropoles et des zones avec une densité faible de population à d'autres endroits.
+
+Pour générer aléatoirement des individus dans le plan avec une forte concentration dans certaines zones, nous définissons des zones métropolitaines.
+
+```{r}
+# Diviser le plan en 4 régions rectangulaires pour placer nos grosses métropoles
+x_mid <- x_max / 2
+y_mid <- y_max / 2
+
+# Placer un point au centre de chaque région rectangulaire
+centers <- data.frame(
+  x = c(x_mid - x_max / 4, x_mid + x_max / 4, x_mid - x_max / 4, x_mid + x_max / 4),
+  y = c(y_mid - y_max / 4, y_mid + y_max / 4, y_mid + y_max / 4, y_mid - y_max / 4)
+)
+
+# Ajouter du bruit à ces 4 points pour obtenir une dispersion aléatoire des individus autour de ces centres
+df <- data.frame(
+  x = c(rnorm(n / 2, centers$x[1], x_max / 10), rnorm(n / 2, centers$x[2], x_max / 10)),
+  y = c(rnorm(n / 2, centers$y[1], y_max / 10), rnorm(n / 2, centers$y[2], y_max / 10))
+)
+
+# Si avoir 4 métropoles ne donnent pas assez de zones vides, nous pouvons ne garder que 2 métropoles en diagonale
+
+
+
+```
+
+
 
 Nous générons les données de contexte des communes i.e une valeur aléatoire est affectée à chaque commune (carré) de notre simulation
 
@@ -115,6 +144,7 @@ Chaque carré ayant un identifiant, nous pouvons lui affecter une donnée de con
 df$square_value <- square_values[df$square_id]
 ```
 
+
 La grille est donc bien modélisée selon le tableau suivant :
 
 ```{r}
@@ -125,7 +155,7 @@ Voici à quoi pourrait typiquement ressembler les données sur lesquelles on sou
 
 # Représentation graphique de notre grille
 
-```{r ,echo=FALSE,include=FALSE} 
+```{r ,echo=FALSE} 
 p_numerote <- ggplot(df, aes(x, y)) +
   geom_bin2d(bins = n_squares) +
   coord_fixed(ratio = 1) +
@@ -176,6 +206,12 @@ agg_indiv_to_communes <- function(data)
 }
 donnees_agg <- agg_indiv_to_communes(donnees)
 donnees_agg <- donnees_agg %>%rename(ID=square_ID)
+```
+
+On complète les communes sans répondants dans le tableau en précisant que nb_repondants_commune=0
+
+```{r}
+
 ```
 
 Les données sont fin prêtes pour l'agrégation.
@@ -589,9 +625,8 @@ donnees_agg$cluster <- clusters[donnees_agg$ID]
 # Fonction pour assigner une couleur en fonction du numéro de carré
 #Cette fonction attribue une couleur différente à chaque cluster en utilisant une palette de couleurs définie
 palette <- c("red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "gray",
-               "darkred", "darkorange", "gold", "darkgreen", "navyblue", "indigo", "violet", "saddlebrown", "darkgray", "silver",
-               "maroon", "tomato", "khaki", "olive", "skyblue", "slategray", "orchid", "sienna", "dimgray", "dimgrey",
-               "crimson", "coral", "lemonchiffon", "limegreen", "cornflowerblue", "mediumorchid", "mediumslateblue", "sienna", "rosybrown", "lightslategray")
+               "darkred", "darkorange", "gold", "darkgreen", "navyblue", "violet", "saddlebrown", "darkgray", 
+               "maroon", "tomato", "khaki", "skyblue", "slategray", "orchid", "sienna", "dimgray", "dimgrey","coral", "lemonchiffon", "limegreen", "cornflowerblue", "mediumorchid", "mediumslateblue", "sienna", "rosybrown", "lightslategray")
 
 # Fonction pour assigner une couleur en fonction du numéro de carré
 color_fun_2 <- function(id) {return(palette[id])}
@@ -614,4 +649,5 @@ ggplot(df, aes(x = x_bin, y = y_bin, fill = color)) +
   ggtitle("CAH sur les données de contexte avec contraintes de contiguité et sur le nombre de répondants")
 ```
 
+Une critique possible est qu'une coloration de la grille n'est peut-être pas optimale ou suffisante en terme de visualisation. Il faudrait peut être définir des contours
 
