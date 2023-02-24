@@ -745,6 +745,44 @@ ggplot(df, aes(x = x_bin, y = y_bin, fill = as.factor(clusters))) +
   ggtitle("CAH avec contraintes de contiguité et nombre de répondants")
 ```
 
+## Autre proposition de datavisualisation : distinction des gros et petits clusters
+
+```{r}
+
+# Fonction pour déterminer si le carré appartient à un cluster de taille supérieure à un seuil donné
+is_big_cluster <- function(id, threshold) {
+  count <- sum(clusters == id)
+  return(count >= threshold)
+}
+
+# Seuil pour considérer un cluster comme "grand"
+#Disons qu'un agrégat est gros s'il a plus de 1 une commune pour commencer
+threshold <- 1
+
+# Fonction pour assigner une couleur en fonction du numéro de carré et de la taille de son cluster
+color_fun_2 <- function(id) {
+  if (is_big_cluster(id, threshold)) {
+    return("#FF0000") # Rouge pour les grands clusters
+  } else {
+    return("#000000") # Noir pour les petits clusters
+  }
+}
+
+# Assigner une couleur à chaque carré
+color <- sapply(clusters, color_fun_2)
+# Convertir au bon format pour l'affichage
+color <- as.vector(as.matrix(color)[,1])
+
+df <- data.frame(x_bin = rep(1: nb_cols_squares, nb_cols_squares), 
+                 y_bin = rep(nb_cols_squares:1, each = nb_cols_squares), 
+                 color = color)
+
+ggplot(df, aes(x = x_bin, y = y_bin, fill = as.factor(clusters))) +
+  geom_tile(color = "black") +
+  scale_fill_manual(values = color) +
+  theme_void()
+```
+
 
 Une critique possible est qu'une coloration de la grille n'est peut-être pas optimale ou suffisante en terme de visualisation. Il faudrait peut être définir des contours de couleurs à la place.
 Comme la partition sera fine de toute manière il peut être intéressant de ne colorer que les clusters qui regroupe plusieurs communes pour limiter la complexité visuelle de l'afichage.
