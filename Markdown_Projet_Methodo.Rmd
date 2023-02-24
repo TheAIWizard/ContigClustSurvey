@@ -655,7 +655,7 @@ indice_min_groupes_retenu <- which(liste_inertie == min_inertie_donnee_contexte,
 # Résultats finaux
 agregats_donnee_contexte_repondant <- liste_groups[[indice_min_groupes_retenu]]
 print('Les agrégats au niveau des données de contexte retenus sur contrainte des répondants sont :')
-print(agregats_donnee_contexte_repondant)
+head(agregats_donnee_contexte_repondant)
 cat("Le rapport d'inertie obtenu sur les données de contexte correspondant vaut:", min_inertie_donnee_contexte,"\n")
 ```
 
@@ -706,10 +706,19 @@ donnees_agg$cluster <- clusters[donnees_agg$ID]
 
 ```{r}
 # Fonction pour assigner une couleur en fonction du numéro de carré
+
+# Création d'un vecteur de couleurs de base
+colors <- c("#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF")
+
+# Création d'une palette de 100 couleurs interpolées
+my_palette <- colorRampPalette(colors)(100)
+
 #Cette fonction attribue une couleur différente à chaque cluster en utilisant une palette de couleurs définie
 palette <- c("red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "gray",
                "darkred", "darkorange", "gold", "darkgreen", "navyblue", "violet", "saddlebrown", "darkgray", 
                "maroon", "tomato", "khaki", "skyblue", "slategray", "orchid", "sienna", "dimgray", "dimgrey","coral", "lemonchiffon", "limegreen", "cornflowerblue", "mediumorchid", "mediumslateblue", "sienna", "rosybrown", "lightslategray")
+               
+palette <- my_palette
 
 # Fonction pour assigner une couleur en fonction du numéro de carré
 color_fun_2 <- function(id) {return(palette[id])}
@@ -719,15 +728,15 @@ color <- sapply(clusters, color_fun_2)
 # Convertir au bon format pour l'affichage
 color <- as.vector(as.matrix(color)[,1])
 
-df <- data.frame(x_bin = rep(1:5, 5), 
-                 y_bin = rep(5:1, each = 5), 
+df <- data.frame(x_bin = rep(1: n_squares, nb_cols_squares), 
+                 y_bin = rep(n_squares:1, each = nb_cols_squares), 
                  color = color)
 
 ggplot(df, aes(x = x_bin, y = y_bin, fill = color)) +
   geom_rect(data = df, aes(xmin = x_bin - 0.5, xmax = x_bin + 0.5,
                            ymin = y_bin - 0.5, ymax = y_bin + 0.5),fill = df$color)+
   scale_fill_identity() +
-  coord_cartesian(xlim = c(0, 6), ylim = c(0, 6)) +
+  coord_cartesian(xlim = c(0, x_max), ylim = c(0, y_max)) +
   theme_void() +
   ggtitle("CAH sur les données de contexte avec contraintes de contiguité et sur le nombre de répondants")
 ```
