@@ -26,11 +26,11 @@ library("dendextend")
 
 ```{r}
 #dimension de l'espace géographique simulé
-x_max <- y_max <- 20
+x_max <- y_max <- 18
 # effectif de la population d'individus à générer
-n <- 500 
+n <- 50000 
 # nombre total de carrés dans la grille
-n_squares <- 25 
+n_squares <- 81
 # nombre de colonnes de carrés
 nb_cols_squares <- sqrt(n_squares) 
 square_side_length <- x_max/nb_cols_squares # longueur des côtés d'un carré
@@ -52,7 +52,7 @@ set.seed(123) # fixer la graine d'aléatoire pour obtenir les mêmes résultats 
 
 Nous pouvons générer nos individus selon une loi uniforme dont les données sont gardées dans un tableau comme ceci: (la cellule suivante ne sera pas exécutée avec "eval = FALSE")
 
-```{r }
+```{r}
 # génération aléatoire d'individus dans le plan
 df <- data.frame(x = runif(n, 0, x_max),
                  y = runif(n, 0, y_max))
@@ -61,9 +61,12 @@ df <- data.frame(x = runif(n, 0, x_max),
 
 Or, pour simuler la réalité, il est souhaitable d'avoir d'une forte concentration sur plusieurs parties de la grille comme pour les métropoles et des zones avec une densité faible de population à d'autres endroits.
 
-Pour générer aléatoirement des individus dans le plan avec une forte concentration dans certaines zones, nous définissons des zones métropolitaines.
+Pour générer aléatoirement des individus dans le plan avec une forte concentration dans certaines zones, nous définissons des zones métropolitaines. Par exemple, 4 sur tout le territoire.
 
-```{r,eval = FALSE}
+
+Nous tout de même en sorte d'avoir au moins un habitant par commune. En 2020, on ne réfère environ que 6 communes sans population légale. Nous prenons donc une variance suffisamment large pour la distribution d'individus générés de sorte à recouvrir le territoire tout en imposant une certaine structure démographique
+
+```{r,eval = FALSE }
 # Diviser le plan en 4 régions rectangulaires pour placer nos grosses métropoles
 x_mid <- x_max / 2
 y_mid <- y_max / 2
@@ -76,17 +79,15 @@ centers <- data.frame(
 
 # Ajouter du bruit à ces 4 points pour obtenir une dispersion aléatoire des individus autour de ces centres
 df <- data.frame(
-  x = c(rnorm(n / 2, centers$x[1], x_max / 10), rnorm(n / 2, centers$x[2], x_max / 10)),
-  y = c(rnorm(n / 2, centers$y[1], y_max / 10), rnorm(n / 2, centers$y[2], y_max / 10))
+  x = c(rnorm(n / 4, centers$x[1], x_max ), rnorm(n / 4, centers$x[2], x_max ),
+        rnorm(n / 4, centers$x[3], x_max ), rnorm(n / 4, centers$x[4], x_max )),
+  y = c(rnorm(n / 4, centers$y[1], y_max ), rnorm(n / 4, centers$y[2], y_max ),
+        rnorm(n / 4, centers$y[3], y_max ), rnorm(n / 4, centers$y[4], y_max ))
 )
 
 # Si avoir 4 métropoles ne donnent pas assez de zones vides, nous pouvons ne garder que 2 métropoles en diagonale
 
-
-
 ```
-
-
 
 Nous générons les données de contexte des communes i.e une valeur aléatoire est affectée à chaque commune (carré) de notre simulation
 
@@ -155,6 +156,8 @@ Voici à quoi pourrait typiquement ressembler les données sur lesquelles on sou
 
 # Représentation graphique de notre grille
 
+L'image est considérée comme trop grande à partir d'une grille de dimension 10x10. La grille sera tout de même modélisée mais il faudra adapter sa RAM si l'utilisateur tient à afficher la grille complète des individus simulés.
+
 ```{r ,echo=FALSE} 
 p_numerote <- ggplot(df, aes(x, y)) +
   geom_bin2d(bins = n_squares) +
@@ -197,7 +200,21 @@ donnees <- dplyr::select(df,square_value,square_id)
 colnames(donnees) <- c("donnee_contexte_commune", "square_ID")
 ```
 
-Pour avoir le nombre de répondants à l'enquête dans chaque commune, nous agrégons les données individuelles à l'échelle des communes.
+## Modélisation des enquêtés
+
+Nous simulons le fait que des individus ont répondu à une enquête dans chaque carré les individus qui ont répondu à une enquête en effectuant un tirage de Bernoulli selon la variable correspondant aux données de contexte.
+
+Nous créons donc une variable binaire "inclusion_enquete" qui renseigne si un individu est sélectionné dans l'enquête.
+
+```{r}
+# Effectuer le tirage de Bernoulli pour chaque carré
+data$inclusion <- rbinom(nrow(data), 1, data$square_value)
+
+# Afficher les carrés inclus dans l'échantillon
+echantillon <- data[data$inclusion == 1, ]
+```
+
+Pour avoir le nombre de répondants à l'enquête dans chaque commune, nous agrégons ensuite les données individuelles à l'échelle des communes.
 
 ```{r, echo = FALSE, results='asis', comment=NA, warning=FALSE, message=FALSE}
 # Fonction pour agréger les données individuelles et avoir le nombre de répondants par commune 
