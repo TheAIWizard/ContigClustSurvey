@@ -556,13 +556,13 @@ distance_between_groups <- function(groups,i,j,fonction_distance) {
   mean2 <- mean(data_group2)
   mean_all <- mean(c(mean(data_group1), mean(data_group2)))
   # Calcul des moyennes pondérées par la taille des communes chaque agrégat
-  mean1_ponderee <- sapply(data_group1[, -1], weighted.mean, w = data_group1$taille_commune)
-  mean2_ponderee <- sapply(data_group2[, -1], weighted.mean, w = data_group2$taille_commune)
+  mean1_ponderee <- sapply(data_group1, weighted.mean, w = data_group1$taille_commune)
+  mean2_ponderee <- sapply(data_group2, weighted.mean, w = data_group2$taille_commune)
   mean_all_ponderee <- mean(c(mean1_ponderee , mean2_ponderee))
   # Calcul des moyennes pondérées par la taille des communes estimée chaque agrégat
   #si nous ne disposons pas des tailles des communes
-  mean1_ponderee_hat <- sapply(data_group1[, -1], weighted.mean, w = data_group1$somme_proba_inclusion_enquete)
-  mean2_ponderee_hat <- sapply(data_group2[, -1], weighted.mean, w = data_group2$somme_proba_inclusion_enquete)
+  mean1_ponderee_hat <- sapply(data_group1, weighted.mean, w = data_group1$somme_proba_inclusion_enquete)
+  mean2_ponderee_hat <- sapply(data_group2, weighted.mean, w = data_group2$somme_proba_inclusion_enquete)
   mean_all_ponderee_hat <- mean(c(mean1_ponderee , mean2_ponderee))
   # Calcul de la distance entre chaque groupe selon la fonction de distance choisie
   distance <- fonction_distance(mean1_ponderee,mean2_ponderee)
@@ -628,7 +628,7 @@ inertie_prec = 100000
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 #choix de la fonction de distance à appliquer
-fonction_distance <- distance_Ward.D2
+fonction_distance <- distance_Ward.D2_ponderee
 ```
 
 ## Initialisation de la partition
