@@ -561,8 +561,8 @@ distance_between_groups <- function(groups,i,j,fonction_distance) {
   mean_all_ponderee <- mean(c(mean1_ponderee , mean2_ponderee))
   # Calcul des moyennes pondérées par la taille des communes estimée chaque agrégat
   #si nous ne disposons pas des tailles des communes
-  mean1_ponderee_hat <- sapply(data_group1[, -1], weighted.mean, w = data_group1$somme_proba_inclusion)
-  mean2_ponderee_hat <- sapply(data_group2[, -1], weighted.mean, w = data_group2$somme_proba_inclusion)
+  mean1_ponderee_hat <- sapply(data_group1[, -1], weighted.mean, w = data_group1$somme_proba_inclusion_enquete)
+  mean2_ponderee_hat <- sapply(data_group2[, -1], weighted.mean, w = data_group2$somme_proba_inclusion_enquete)
   mean_all_ponderee_hat <- mean(c(mean1_ponderee , mean2_ponderee))
   # Calcul de la distance entre chaque groupe selon la fonction de distance choisie
   distance <- fonction_distance(mean1_ponderee,mean2_ponderee)
