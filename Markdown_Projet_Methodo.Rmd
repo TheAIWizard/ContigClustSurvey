@@ -322,7 +322,7 @@ Pour avoir le nombre de répondants à l'enquête dans chaque commune, nous agr�
 ```{r, echo = FALSE, results='asis', comment=NA, warning=FALSE, message=FALSE}
 # Fonction pour agréger les données individuelles et avoir le nombre de répondants par commune 
 agg_indiv_to_communes <- function(data)
-{data %>% group_by(ID,donnee_contexte_commune) %>% summarize(nb_repondants_commune = sum(inclusion_enquete))
+{data %>% group_by(ID,donnee_contexte_commune) %>% summarize(nb_repondants_commune = sum(inclusion_enquete),taille_commune=n(),somme_proba_inclusion_enquete=sum(proba_inclusion_enquete))
 }
 donnees_agg <- agg_indiv_to_communes(donnees)
 ```
@@ -447,10 +447,35 @@ Dans le cas où les agrégats ne contiennent qu'une commune, nous voulons choisi
 
 #### Quelques distances basiques si nous n'avons pas de contraintes particulières.
 
-La distance
+Nous avons quelques distances selon si les données de contexte sont qualitatives ou quantitatives.
+Pour les variables continues: possibilité d'utiliser la distance de Mahalanobis ou de Manhattan
+Pour les variables catégorielles: possibilité d'utiliser la distance de Jaccard ou de Hamming
 
 ```{r}
-distance <- sqrt(sum((center1 - center2)^2 * data[group1, "pop"] * data[group2, "pop"]))
+# Pour des variables continues
+#Pour la distance de Mahalanobis, il faut spécifier la matrice de covariance comme argument.
+distance_mahalanobis <- function(mean1, mean2, cov) {
+  sqrt((mean1 - mean2) %*% solve(cov) %*% t(mean1 - mean2))
+}
+distance_manhattan <- function(mean1, mean2) {
+  sum(abs(mean1 - mean2))
+}
+# Pour des variables catégorielles
+distance_Jaccard <- function(data_group1, data_group2) {
+  # Nombre d'éléments dans les deux groupes combinés
+  n <- length(union(data_group1, data_group2))
+  # Nombre d'éléments communs aux deux groupes
+  n_common <- length(intersect(data_group1, data_group2))
+  # Calcul de la distance de Jaccard
+  dist_jaccard <- 1 - n_common / n
+  return(dist_jaccard)
+}
+#par vote majoritaire
+distance_Hamming <- function(data_group1, data_group2){
+  # Calcul de la distance de Hamming entre deux groupes
+  dist_hamming <- sum(data_group1 != data_group2)
+  return(dist_hamming)
+}
 ```
 
 #### Distance de Ward.D2 : pour avoir les agrégats les plus homogènes possibles
@@ -462,10 +487,19 @@ Pour cela, nous choisissons une mesure de similarité très performante pour ré
 Pour expliquer brièvement le principe, elle mesure la variance totale des deux agrégats à fusionner. Elle est calculée en comparant la somme des carrés des distances de chaque point à son centre de gravité dans chaque agrégat. Cette distance mesure ainsi la différence entre la somme des carrés des distances de chaque objet dans le même agrégat et la somme des carrés des distances de chaque objet dans des agrégats différents.
 
 ```{r}
-
+distance_Ward.D2 <- function(mean1,mean2){
+  # Calcul de la somme des carrés des écarts à la moyenne pour chaque groupe
+  ssd1 <- sum((data_group1 - mean1) ^ 2)
+  ssd2 <- sum((data_group2 - mean2) ^ 2)
+  # Calcul de la somme des carrés des écarts à la moyenne pour tous les points
+  ssd_all <- sum((c(data_group1,data_group2) - mean_all) ^ 2)
+  # Calcul de la distance entre deux groupes pour la méthode ward.d2
+  dist_between_groups <- ssd_all - (ssd1 + ssd2)
+  return(sqrt(dist_between_groups / (length(data_group1)+length(data_group2))))
+}
 ```
 
-#### Distance euclidienne pondérée
+#### Distance pondérée
 
 La mesure de similarité précédente prend en compte des considérations purement statistiques mais comme nous nous trouvons dans le cadre d'un thème précis qui est la classification **géographique**, il est possible voire davantage cohérent de tirer profit d'une pondération des communes. 
 
@@ -473,21 +507,45 @@ Tout comme, il est proposé dans le code proposé par M. Hisnard, "l’utilisate
 
 Plutôt que la distance de Ward.D2 classique, il peut être intéressant de regarder celle entre deux unités dans un ensemble de données, en prenant en compte une variable pondérée nommée "Poids". ( explication d'ajout du terme P1*P2/(P1+P2)). En effet, certaines méthodes de regroupement, comme l'écart de Ward, peuvent être plus sensibles aux différences de taille entre les clusters. Dans ces cas, il peut être utile de normaliser la distance entre les individus avant de calculer la distance entre les clusters pour éviter que les différences de taille ne dominent le processus de regroupement.
 
-Ainsi, nous pouvons normaliser par la taille des communes en agrégeant les individus par commune pour compter le nombre de points dans chaque carré. Il est intéressant de noter que *si l'information de la taille de la commune est indisponible, il est possible de l'estimer en sommant les poids de sondage de chaque enquêté par commune*. Sommer les poids de sondage dans chaque commune correspond aussi à une agrégation à l'échelle des communes.
+Dans notre cas, nous allons simplement adapter le code en calculant une moyenne pondérée des individus à la place d'une moyenne classique. 
+
+Nous pouvons donc calculer une fonction de distance euclidienne pondérée comme ci-dessus comme recherché par Hisnard.
 
 ```{r}
+distance_euclidienne_ponderee <- function(mean1_ponderee1, mean1_ponderee2) {
+  sqrt(sum(weights * (mean1_ponderee - mean2_ponderee)^2))
+}
+```
 
+Mais nous pouvons faire mieux puisque nous pouvons modifier la distance de Ward.D2 de sorte à ce qu'elle prenne en compte la pondération : 
+
+```{r}
+distance_Ward.D2_ponderee <- function(mean1,mean2){
+  # Vecteurs des poids des 2 agrégats
+  w1 <- data_group1$taille_commune
+  w1 <- data_group1$taille_commune
+  # Calcul de la somme des carrés des écarts à la moyenne pondérée pour chaque groupe
+  ssd1 <- sum(w1 * (data_group1 - mean1)^2)
+  ssd2 <- sum(w2 * (data_group2 - mean2)^2)
+  # Calcul de la somme des carrés des écarts à la moyenne pour tous les points
+  ssd_all <- sum((c(data_group1,data_group2) - mean_all) ^ 2)
+  # Calcul de la distance entre deux groupes pour la méthode ward.d2 pondérée
+  dist_between_groups <- ssd_all + w1*w2*(mean1-mean2)^2/(w1+w2)
+  return(sqrt(dist_between_groups / ((length(data_group1)+length(data_group2)))))
+  
+}
 ```
 
 
+Ainsi, nous pouvons normaliser par la taille des communes en agrégeant les individus par commune pour compter le nombre de points dans chaque carré. Il est intéressant de noter que *si l'information de la taille de la commune est indisponible, il est possible de l'estimer en sommant les poids de sondage de chaque enquêté par commune*. Sommer les poids de sondage dans chaque commune correspond aussi à une agrégation à l'échelle des communes.
+
 ### Implémentation générale du calcul de distance entre agrégats suivant la fonction de distance choisie
 
-Pour regrouper les communes qui se ressemblent, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons la convention suivante pour faciliter l'implémentation: deux communes sont respectivement vues comme deux agrégats qui contiennent chacun une unique commune. Cela reste cohérent puisque si chaque agrégat ne contient qu'un seul élément, la fonction distance_between_groups doit retourner la fonction définie dans la partie "*Fonction de distance entre les communes*" entre ces deux éléments. Nous avons donc une fonction qui généralise la notion de distance entre les communes et les agrégats.
-
+Pour regrouper les communes qui se ressemblent, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons la convention suivante pour faciliter l'implémentation: deux communes sont respectivement vues comme deux agrégats qui contiennent chacun une unique commune. Cela reste cohérent puisque si chaque agrégat ne contient qu'un seul élément, la fonction distance_between_groups doit retourner une des fonctions définies précedemment entre ces deux éléments. Nous avons donc une fonction qui généralise la notion de distance entre les communes et les agrégats.
 
 
 ```{r}
-distance_between_groups <- function(groups,i,j) {
+distance_between_groups <- function(groups,i,j,fonction_distance) {
   # Calcul de la distance entre deux groupes pour la méthode ward.d2
   # voir "Ward’s Hierarchical Clustering Method:Clustering Criterion and Agglomerative Algorithm"
   n <- length(groups[[i]]) + length(groups[[j]])
@@ -497,14 +555,19 @@ distance_between_groups <- function(groups,i,j) {
   mean1 <- mean(data_group1)
   mean2 <- mean(data_group2)
   mean_all <- mean(c(mean(data_group1), mean(data_group2)))
-  # Calcul de la somme des carrés des écarts à la moyenne pour chaque groupe
-  ssd1 <- sum((data_group1 - mean1) ^ 2)
-  ssd2 <- sum((data_group2 - mean2) ^ 2)
-  # Calcul de la somme des carrés des écarts à la moyenne pour tous les points
-  ssd_all <- sum((c(data_group1,data_group2) - mean_all) ^ 2)
-  # Calcul de la distance entre deux groupes pour la méthode ward.d2
-  dist_between_groups <- ssd_all - (ssd1 + ssd2)
-  return(sqrt(dist_between_groups / (n)))
+  # Calcul des moyennes pondérées par la taille des communes chaque agrégat
+  mean1_ponderee <- sapply(data_group1[, -1], weighted.mean, w = data_group1$taille_commune)
+  mean2_ponderee <- sapply(data_group2[, -1], weighted.mean, w = data_group2$taille_commune)
+  mean_all_ponderee <- mean(c(mean1_ponderee , mean2_ponderee))
+  # Calcul des moyennes pondérées par la taille des communes estimée chaque agrégat
+  #si nous ne disposons pas des tailles des communes
+  mean1_ponderee_hat <- sapply(data_group1[, -1], weighted.mean, w = data_group1$somme_proba_inclusion)
+  mean2_ponderee_hat <- sapply(data_group2[, -1], weighted.mean, w = data_group2$somme_proba_inclusion)
+  mean_all_ponderee_hat <- mean(c(mean1_ponderee , mean2_ponderee))
+  # Calcul de la distance entre chaque groupe selon la fonction de distance choisie
+  distance <- fonction_distance(mean1_ponderee,mean2_ponderee)
+  # On retourne la distance
+  return(distance)
 }
 ```
 
@@ -564,6 +627,8 @@ seuil_inertie <- 0.000001
 inertie_prec = 100000
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
+#choix de la fonction de distance à appliquer
+fonction_distance <- distance_Ward.D2
 ```
 
 ## Initialisation de la partition
@@ -597,7 +662,7 @@ for (i in 1:length(groups)) {
         #contrainte de taille sur le nombre de répondants par agrégat
         if (sum(filter(donnees_agg,ID %in% groups[[i]])$nb_repondants_commune)
             + sum(filter(donnees_agg,ID %in% groups[[j]])$nb_repondants_commune) <= nb_repondants_max) { #contrainte de taille sur nombre de répondants
-          dist_mat[i,j] <- distance_between_groups(groups,i,j)
+          dist_mat[i,j] <- distance_between_groups(groups,i,j,fonction_distance)
           dist_mat[j,i] <- dist_mat[i,j]
         }
       }
@@ -680,7 +745,7 @@ while (!convergence) {
         #avant de recalculer les distances,on vérifie donc encore la contrainte de contiguité 
         #entre ce nouvel agrégat et les autres pour éviter les caluls inutiles
         if (groupes_voisins(groups,i,k)){
-          dist_mat[i,k] <- dist_mat[k,i] <- distance_between_groups(groups,i,k)
+          dist_mat[i,k] <- dist_mat[k,i] <- distance_between_groups(groups,i,k,fonction_distance)
         }
         else{dist_mat[i,k] <- dist_mat[k,i] <- Inf
         }
