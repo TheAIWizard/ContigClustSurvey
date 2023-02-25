@@ -11,7 +11,7 @@ Ce code pouvant très bien s'adapter sur des données réelles est effectué sur
 
 ## Import des packages
 
-```{r setup, results = FALSE}
+```{r setup, results = FALSE,results='asis', comment=NA, warning=FALSE, message=FALSE}
 library(ggplot2) # package pour affichage graphique de la grille
 library(dplyr) # package pour manipuler les données
 library(igraph) # package pour la manipulation de graphe
@@ -52,7 +52,7 @@ set.seed(123) # fixer la graine d'aléatoire pour obtenir les mêmes résultats 
 
 Si l'on ne souhaite pas donner de structure démographique particulière, nous pouvons générer nos individus selon une loi uniforme dont les données sont gardées dans un tableau comme ceci: (la cellule suivante ne sera pas exécutée avec "eval = FALSE")
 
-```{r}
+```{r ,eval=FALSE}
 # génération aléatoire d'individus dans le plan
 df <- data.frame(x = runif(n, 0, x_max),
                  y = runif(n, 0, y_max))
@@ -61,7 +61,7 @@ df <- data.frame(x = runif(n, 0, x_max),
 
 Or, pour simuler la réalité, il est souhaitable d'avoir d'une forte concentration sur plusieurs parties de la grille comme pour les métropoles et des zones avec une densité faible de population à d'autres endroits.
 
-Pour générer aléatoirement des individus dans le plan avec une forte concentration dans certaines zones, nous définissons un certain nombre de zones métropolitaines. Par défaut, nous choisissons 2 fois le nombre de carrés pour
+Pour générer aléatoirement des individus dans le plan avec une forte concentration dans certaines zones, nous définissons un certain nombre de zones métropolitaines. Par défaut, nous choisissons 2 fois le nombre de carrés par ligne pour avoir un nombre de métropoles proportionnel à la dimension de la grille et recouvrir une large partie du plan.
 
 Nous faisons tout de même en sorte d'avoir au moins un habitant par commune. En 2020, on ne réfère environ que 6 communes sans population légale. Nous prenons donc une variance suffisamment large pour la distribution d'individus générés de sorte à recouvrir le territoire tout en imposant une certaine structure démographique
 
@@ -231,15 +231,45 @@ colnames(donnees) <- c("donnee_contexte_commune", "ID")
 
 Nous simulons le fait que des individus ont répondu à une enquête dans chaque carré les individus qui ont répondu à une enquête en effectuant un tirage de Bernoulli selon la variable correspondant aux données de contexte. Cela permet de modéliser le fait que plus la variable d'intérêt est grande plus il y a de chances d'avoir de répondants.
 
+**Première option** : Nous tirons simplement des individus au hasard sur tout le territoire.
+**Deuxième option** : Nous effectuons un échantillonage à deux degrés en ayant pour unité primaire les communes et comme unité secondaire les individus.
+
+Nous privilégions la seconde option étant une technique très utilisée dans le SSP. De plus, il y a un gain potentiel de variance par rapport à un échantillonnage directement sur les individus du territoire métropolitain français, en particulier si la variable d'intérêt varie considérablement entre les communes. Nous nous assurons alors que l'échantillon obtenu est représentatif des différentes strates de la population étudiée (les communes dans ce cas), ce qui peut permettre de réduire la variance de l'estimateur de la moyenne ou de la proportion.
+
+Autre avantage du tirage à deux degrés: améliorer l'estimation de la taille des unités primaires, dans ce cas les communes (ou carrés). Nous verrons en quoi cela peut-être intéressant lors de l'implémentation de la distance de similarité.
+
 Nous créons donc une variable binaire "inclusion_enquete" qui renseigne si un individu est sélectionné dans l'enquête.
 
-```{r}
+####  Implémentation de la première option de tirage (non exécutée: eval=FALSE)
+
+```{r ,eval=TRUE}
 # Effectuer le tirage de Bernoulli selon les données de contexte pour chaque carré
 donnees$inclusion_enquete <- rbinom(nrow(donnees), 1, donnees$donnee_contexte_commune)
 
 # Afficher les carrés inclus dans l'échantillon
 echantillon <- donnees[donnees$inclusion_enquete == 1, ]
 cat("Le nombre d'individus enquêté est de", dim(echantillon)[1])
+```
+
+####Implémentation de la seconde option de tirage
+
+```{r,eval =FALSE}
+# Nombre de carrés à tirer ou unités primaires, communes
+n_squares_sample <- 10
+
+# Tirage des carrés au hasard dans chaque commune
+squares_sample <- sample(unique(donnees$ID), n_squares_sample)
+
+# Sous-échantillonnage des individus pour chaque carré sélectionné
+donnees_subsampled <- donnees %>%
+  filter(carre_id %in% squares_sample) %>%
+  group_by(carre_id) %>%
+  sample_n(ceiling(0.5 * n()))
+
+# Effectuer le tirage de Bernoulli selon les données de contexte pour chaque individu
+donnees_subsampled$inclusion_enquete <- rbinom(nrow(donnees_subsampled), 1, donnees_subsampled$donnee_contexte_commune)
+
+
 ```
 
 ### Définition des zones d'absence d'enquêté
@@ -302,6 +332,15 @@ Les données sont fin prêtes pour l'agrégation.
 ```{r}
 head(donnees_agg)
 ```
+
+## Observation du lien entre données de contexte et nombre de répondants
+
+Nous avons une structure des données de contexte qui affecte positivement avec le nombre de répondants
+
+```{r}
+plot(donnees_agg$nb_repondants_commune,donnees_agg$donnee_contexte_commune)
+```
+
 
 # Codification de la structure de voisinage
 
@@ -402,15 +441,50 @@ groupes_voisins <- function(groups,i,j){ #fonction qui évalue si les agrégats 
 }
 ```
 
-### Fonction de distance entre les agrégats de commune
+### Plusieurs fonctions de distance possibles selon les besoins
 
-Plutôt que de définir seulement une fonction de distance entre deux communes, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons que deux communes correspondent à deux agrégats qui contiennent respectivement chacun une unique commune.
+Dans le cas où les agrégats ne contiennent qu'une commune, nous voulons choisir la fonction de distance appropriée. Pour modéliser nos données de contexte, nous avons choisi une proportion qui pourrait par exemple représenter le taux de tabagisme dans la commune mais ce n'est pas le seul type de variable possible. Nous laissons dons le choix à l'utilisateur de choisir la distance qui correspond au mieux aux données de contexte. Il a la possibilité d'implémenter d'autres distances entre les agrégats
+
+#### Quelques distances basiques si nous n'avons pas de contraintes particulières.
+
+La distance
+
+```{r}
+distance <- sqrt(sum((center1 - center2)^2 * data[group1, "pop"] * data[group2, "pop"]))
+```
+
+#### Distance de Ward.D2 : pour avoir les agrégats les plus homogènes possibles
 
 Nous souhaitons regrouper les communes qui se ressemblent le plus en terme de données de contexte. Les communes doivent donc être les plus homogènes possibles au sein d'un agrégat et les agrégats doivent être les plus différents possibles. En conséquence, la fonction est donc construite sur les données de contexte associées à chaque commune.
 
-Pour cela, nous choisissons une mesure de similarité très performante pour répondre à notre besoin, et classiquement utilisé pour le clustering hiérarchique (notamment populaire avec le langage R). Il s'agit de la distance de Ward.D2 dont l'implémentation est détaillée dans "Ward’s Hierarchical Clustering Method:Clustering Criterion and Agglomerative Algorithm", Pierre Legendre, Fionn Murtagh.
+Pour cela, nous choisissons une mesure de similarité très performante pour répondre à notre besoin, et classiquement utilisé pour le clustering hiérarchique (notamment populaire avec le langage R). Il s'agit de la distance de Ward.D2 dont l'implémentation est détaillée dans "Ward’s Hierarchical Clustering Method:Clustering Criterion and Agglomerative Algorithm", Pierre Legendre, Fionn Murtagh.  L'écart de Ward est une méthode de liaison qui cherche à minimiser la somme des carrés des différences entre chaque individu et la moyenne de son groupe, tout en maximisant la séparation entre les groupes. Cette méthode prend en compte les distances entre les individus, mais pas la distance absolue.
 
-Pour expliquer brièvement le principe, elle mesure la variance totale de toutes les données à travers tous les agrégats créés par la classification. Elle est calculée en comparant la somme des carrés des distances de chaque point à son centre de gravité dans chaque agrégat. Cette distance mesure ainsi la différence entre la somme des carrés des distances de chaque objet dans le même agrégat et la somme des carrés des distances de chaque objet dans des agrégats différents.
+Pour expliquer brièvement le principe, elle mesure la variance totale des deux agrégats à fusionner. Elle est calculée en comparant la somme des carrés des distances de chaque point à son centre de gravité dans chaque agrégat. Cette distance mesure ainsi la différence entre la somme des carrés des distances de chaque objet dans le même agrégat et la somme des carrés des distances de chaque objet dans des agrégats différents.
+
+```{r}
+
+```
+
+#### Distance euclidienne pondérée
+
+La mesure de similarité précédente prend en compte des considérations purement statistiques mais comme nous nous trouvons dans le cadre d'un thème précis qui est la classification **géographique**, il est possible voire davantage cohérent de tirer profit d'une pondération des communes. 
+
+Tout comme, il est proposé dans le code proposé par M. Hisnard, "l’utilisateur est évidemment libre de choisir toute autre distance. Il convient de remarquer que le choix de la distance peut influer sur la taille des classe créées, par-là sur le nombre de voisins à chaque itération et donc sur la durée du programme."
+
+Plutôt que la distance de Ward.D2 classique, il peut être intéressant de regarder celle entre deux unités dans un ensemble de données, en prenant en compte une variable pondérée nommée "Poids". ( explication d'ajout du terme P1*P2/(P1+P2)). En effet, certaines méthodes de regroupement, comme l'écart de Ward, peuvent être plus sensibles aux différences de taille entre les clusters. Dans ces cas, il peut être utile de normaliser la distance entre les individus avant de calculer la distance entre les clusters pour éviter que les différences de taille ne dominent le processus de regroupement.
+
+Ainsi, nous pouvons normaliser par la taille des communes en agrégeant les individus par commune pour compter le nombre de points dans chaque carré. Il est intéressant de noter que *si l'information de la taille de la commune est indisponible, il est possible de l'estimer en sommant les poids de sondage de chaque enquêté par commune*. Sommer les poids de sondage dans chaque commune correspond aussi à une agrégation à l'échelle des communes.
+
+```{r}
+
+```
+
+
+### Implémentation générale du calcul de distance entre agrégats suivant la fonction de distance choisie
+
+Pour regrouper les communes qui se ressemblent, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons la convention suivante pour faciliter l'implémentation: deux communes sont respectivement vues comme deux agrégats qui contiennent chacun une unique commune. Cela reste cohérent puisque si chaque agrégat ne contient qu'un seul élément, la fonction distance_between_groups doit retourner la fonction définie dans la partie "*Fonction de distance entre les communes*" entre ces deux éléments. Nous avons donc une fonction qui généralise la notion de distance entre les communes et les agrégats.
+
+
 
 ```{r}
 distance_between_groups <- function(groups,i,j) {
@@ -434,11 +508,7 @@ distance_between_groups <- function(groups,i,j) {
 }
 ```
 
-La mesure de similarité précédente prend en compte des considérations purement statistiques mais comme nous nous trouvons dans le cadre d'un thème précis qui est la classification **géographique**, il est possible voire davantage cohérent de tirer profit d'une pondération des communes. 
 
-Tout comme, il est proposé dans le code proposé par M. Hisnard, "l’utilisateur est évidemment libre de choisir toute autre distance. Il convient de remarquer que le choix de la distance peut influer sur la taille des classe créées, par-là sur le nombre de voisins à chaque itération et donc sur la durée du programme."
-
-Plutôt que la distance de Ward.D2 classique, il peut être intéressant de regarder celle entre deux unités dans un ensemble de données, en prenant en compte une variable pondérée nommée "Poids". ( explication d'ajout du terme P1*P2/(P1+P2))
 
 ### Fonction de fusion des agrégats.
 
@@ -513,7 +583,7 @@ head(groups)
 
 Nous initialisons une matrice de distance entre les agrégats de dimension n_squares*n_squares. La taille de la matrice va diminuer au fur et à mesure que le nombre d'agrégats diminue.
 
-À l'initialisation, la matrice ne renseignera la distance entre 2 communes qui sont voisines et dont la somme de nombre de répondants n'excède pas le seuil de répondants fixé. Une valeur Infinie est donnée pour les autres paires de communes pour éviter d'avoir un minimum de distance en dehors des contraintes de contiguïté et de nombre de répondants puisque de toute façon seules les communes voisines entre-elles nous intéressent. L'idée de rajouter des termes infinis s'inspirent du papier "Hierarchical Clustering with Contiguity Constraint in R" rédigé par Pierre Legendre et Guillaume Guénard.
+À l'initialisation, la matrice ne renseignera la distance entre 2 communes qui sont voisines et dont la somme de nombre de répondants n'excède pas le seuil de répondants fixé. Une valeur Infinie est donnée pour les autres paires de communes pour éviter d'avoir un minimum de distance en dehors des contraintes de contiguïté et de nombre de répondants puisque de toute façon seules les communes voisines entre-elles nous intéressent. L'idée de rajouter des termes infinis s'inspire du papier "Hierarchical Clustering with Contiguity Constraint in R" rédigé par Pierre Legendre et Guillaume Guénard.
 
 ```{r}
 # Initialisation de la matrice de distance entre les groupes
