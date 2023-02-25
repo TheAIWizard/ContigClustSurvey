@@ -234,7 +234,7 @@ Nous simulons le fait que des individus ont répondu à une enquête dans chaque
 **Première option** : Nous tirons simplement des individus au hasard sur tout le territoire.
 **Deuxième option** : Nous effectuons un échantillonage à deux degrés en ayant pour unité primaire les communes et comme unité secondaire les individus.
 
-Nous privilégions la seconde option étant une technique très utilisée dans le SSP. De plus, il y a un gain potentiel de variance par rapport à un échantillonnage directement sur les individus du territoire métropolitain français, en particulier si la variable d'intérêt varie considérablement entre les communes. Nous nous assurons alors que l'échantillon obtenu est représentatif des différentes strates de la population étudiée (les communes dans ce cas), ce qui peut permettre de réduire la variance de l'estimateur de la moyenne ou de la proportion.
+Nous privilégions la seconde option qui est davantage dans l'esprit du papier *Un algorithme de regroupement d'unités statistiques selon certains critères de similitude* écrit par Michel Isnard et Marc Christine. De plus, il y a un gain potentiel de variance par rapport à un échantillonnage directement sur les individus du territoire métropolitain français, en particulier si la variable d'intérêt varie considérablement entre les communes. Nous nous assurons alors que l'échantillon obtenu est représentatif des différentes strates de la population étudiée (les communes dans ce cas), ce qui peut permettre de réduire la variance de l'estimateur de la moyenne ou de la proportion.
 
 Autre avantage du tirage à deux degrés: améliorer l'estimation de la taille des unités primaires, dans ce cas les communes (ou carrés). Nous verrons en quoi cela peut-être intéressant lors de l'implémentation de la distance de similarité.
 
@@ -246,28 +246,35 @@ Nous créons donc une variable binaire "inclusion_enquete" qui renseigne si un i
 # Effectuer le tirage de Bernoulli selon les données de contexte pour chaque carré
 donnees$inclusion_enquete <- rbinom(nrow(donnees), 1, donnees$donnee_contexte_commune)
 
+# Calculer la probabilité d'inclusion pour chaque individu
+prob_inclusion <- ave(donnees$inclusion_enquete, donnees$ID, FUN = function(x) sum(x)/length(x))
+donnees$proba_inclusion_enquete <- prob_inclusion[donnees$ID]
+
 # Afficher les carrés inclus dans l'échantillon
 echantillon <- donnees[donnees$inclusion_enquete == 1, ]
 cat("Le nombre d'individus enquêté est de", dim(echantillon)[1])
+
 ```
 
 ####Implémentation de la seconde option de tirage
 
 ```{r,eval =FALSE}
-# Nombre de carrés à tirer ou unités primaires, communes
-n_squares_sample <- 10
+# Nombre d'unités primaires à tirer, ici les communes
+n_up_sample <- 10
 
-# Tirage des carrés au hasard dans chaque commune
-squares_sample <- sample(unique(donnees$ID), n_squares_sample)
+# Tirage des unités primaires au hasard
+set.seed(123) # pour reproduire les résultats
+up_sample <- sample(unique(donnees$ID), n_up_sample)
 
-# Sous-échantillonnage des individus pour chaque carré sélectionné
+# Sous-échantillonnage des unités secondaires pour chaque unité primaire sélectionnée
 donnees_subsampled <- donnees %>%
-  filter(carre_id %in% squares_sample) %>%
-  group_by(carre_id) %>%
+  filter(ID %in% up_sample) %>%
+  group_by(ID) %>%
   sample_n(ceiling(0.5 * n()))
 
-# Effectuer le tirage de Bernoulli selon les données de contexte pour chaque individu
-donnees_subsampled$inclusion_enquete <- rbinom(nrow(donnees_subsampled), 1, donnees_subsampled$donnee_contexte_commune)
+# Calcul des probabilités d'inclusion pour chaque unité secondaire
+donnees_subsampled$proba_inclusion <- donnees_subsampled$donnee_contexte_commune
+
 
 
 ```
@@ -335,7 +342,7 @@ head(donnees_agg)
 
 ## Observation du lien entre données de contexte et nombre de répondants
 
-Nous avons une structure des données de contexte qui affecte positivement avec le nombre de répondants
+Nous avons une structure des données de contexte qui affecte positivement avec le nombre de répondants. Observe t-on une corrélation entre les données de contexte et le nombre de répondants ?
 
 ```{r}
 plot(donnees_agg$nb_repondants_commune,donnees_agg$donnee_contexte_commune)
@@ -487,7 +494,7 @@ Pour cela, nous choisissons une mesure de similarité très performante pour ré
 Pour expliquer brièvement le principe, elle mesure la variance totale des deux agrégats à fusionner. Elle est calculée en comparant la somme des carrés des distances de chaque point à son centre de gravité dans chaque agrégat. Cette distance mesure ainsi la différence entre la somme des carrés des distances de chaque objet dans le même agrégat et la somme des carrés des distances de chaque objet dans des agrégats différents.
 
 ```{r}
-distance_Ward.D2 <- function(mean1,mean2){
+distance_Ward.D2 <- function(datagroup1,datagroup2,mean1,mean2){
   # Calcul de la somme des carrés des écarts à la moyenne pour chaque groupe
   ssd1 <- sum((data_group1 - mean1) ^ 2)
   ssd2 <- sum((data_group2 - mean2) ^ 2)
@@ -512,18 +519,15 @@ Dans notre cas, nous allons simplement adapter le code en calculant une moyenne 
 Nous pouvons donc calculer une fonction de distance euclidienne pondérée comme ci-dessus comme recherché par Hisnard.
 
 ```{r}
-distance_euclidienne_ponderee <- function(mean1_ponderee1, mean1_ponderee2) {
-  sqrt(sum(weights * (mean1_ponderee - mean2_ponderee)^2))
+distance_euclidienne_ponderee <- function(datagroup1,datagroup2,mean1_ponderee1, mean1_ponderee2,w1,w2) {
+  sqrt(sum(w1*w2*(mean1_ponderee - mean2_ponderee)^2)/(w1+w2))
 }
 ```
 
 Mais nous pouvons faire mieux puisque nous pouvons modifier la distance de Ward.D2 de sorte à ce qu'elle prenne en compte la pondération : 
 
 ```{r}
-distance_Ward.D2_ponderee <- function(mean1,mean2){
-  # Vecteurs des poids des 2 agrégats
-  w1 <- data_group1$taille_commune
-  w1 <- data_group1$taille_commune
+distance_Ward.D2_ponderee <- function(datagroup1,datagroup2,mean1,mean2,w1,w2){
   # Calcul de la somme des carrés des écarts à la moyenne pondérée pour chaque groupe
   ssd1 <- sum(w1 * (data_group1 - mean1)^2)
   ssd2 <- sum(w2 * (data_group2 - mean2)^2)
@@ -537,35 +541,56 @@ distance_Ward.D2_ponderee <- function(mean1,mean2){
 ```
 
 
-Ainsi, nous pouvons normaliser par la taille des communes en agrégeant les individus par commune pour compter le nombre de points dans chaque carré. Il est intéressant de noter que *si l'information de la taille de la commune est indisponible, il est possible de l'estimer en sommant les poids de sondage de chaque enquêté par commune*. Sommer les poids de sondage dans chaque commune correspond aussi à une agrégation à l'échelle des communes.
+Ainsi, nous pouvons normaliser par la taille des communes en agrégeant les individus par commune pour compter le nombre de points dans chaque carré. 
+
+#### Distance pondérée par une estimation de la taille des communes en cas d'absence d'information 
+
+Il est intéressant de noter que *si l'information de la taille de la commune est indisponible, il est possible de l'estimer en sommant les poids de sondage de chaque enquêté par commune*. Sommer les poids de sondage dans chaque commune correspond aussi à une agrégation à l'échelle des communes.
+
+C'est une innovation de notre travail, nous reprenons le même principe en prenant cette fois-ci la somme des poids de sondage comme estimation de la taille de la commune.
+
+Au lieu de renseigner les tailles de commune comme pondération dans les fonctions de distances pondérées, on renseigne les tailles de commune **estimées** comme facteur de pondération
+
 
 ### Implémentation générale du calcul de distance entre agrégats suivant la fonction de distance choisie
 
 Pour regrouper les communes qui se ressemblent, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons la convention suivante pour faciliter l'implémentation: deux communes sont respectivement vues comme deux agrégats qui contiennent chacun une unique commune. Cela reste cohérent puisque si chaque agrégat ne contient qu'un seul élément, la fonction distance_between_groups doit retourner une des fonctions définies précedemment entre ces deux éléments. Nous avons donc une fonction qui généralise la notion de distance entre les communes et les agrégats.
 
+Par défaut, nous considérons que la taille de population de chaque commune est parfaitement connue, si ce n'est pas le cas, l'utilisateur peut activer l'option **estimation_taille_commune=TRUE**.
+
 
 ```{r}
-distance_between_groups <- function(groups,i,j,fonction_distance) {
+distance_between_groups <- function(groups,i,j,fonction_distance,estimation_taille_commune=FALSE) {
   # Calcul de la distance entre deux groupes pour la méthode ward.d2
   # voir "Ward’s Hierarchical Clustering Method:Clustering Criterion and Agglomerative Algorithm"
   n <- length(groups[[i]]) + length(groups[[j]])
+  # Vecteurs des poids selon la taille des communes des 2 agrégats
+  w1 <- filter(donnees_agg,ID %in% groups[[i]])$taille_commune
+  w2 <- filter(donnees_agg,ID %in% groups[[j]])$taille_commune
+  # Vecteurs des poids des 2 agrégats
+  w1_hat <- filter(donnees_agg,ID %in% groups[[i]])$somme_proba_inclusion_enquete
+  w2_hat <- filter(donnees_agg,ID %in% groups[[j]])$somme_proba_inclusion_enquete
   # Filtre des valeurs de la variable d'intérêt associés aux ID des clusters 
   data_group1 <- filter(donnees_agg,ID %in% groups[[i]])$donnee_contexte_commune
   data_group2 <- filter(donnees_agg,ID %in% groups[[j]])$donnee_contexte_commune
+  # Recacul des barycentres (version sans pondération)
   mean1 <- mean(data_group1)
   mean2 <- mean(data_group2)
   mean_all <- mean(c(mean(data_group1), mean(data_group2)))
   # Calcul des moyennes pondérées par la taille des communes chaque agrégat
-  mean1_ponderee <- sapply(data_group1, weighted.mean, w = data_group1$taille_commune)
-  mean2_ponderee <- sapply(data_group2, weighted.mean, w = data_group2$taille_commune)
+  mean1_ponderee <- sapply(data_group1, weighted.mean, w = w1)
+  mean2_ponderee <- sapply(data_group2, weighted.mean, w = w2)
   mean_all_ponderee <- mean(c(mean1_ponderee , mean2_ponderee))
   # Calcul des moyennes pondérées par la taille des communes estimée chaque agrégat
   #si nous ne disposons pas des tailles des communes
-  mean1_ponderee_hat <- sapply(data_group1, weighted.mean, w = data_group1$somme_proba_inclusion_enquete)
-  mean2_ponderee_hat <- sapply(data_group2, weighted.mean, w = data_group2$somme_proba_inclusion_enquete)
+  mean1_ponderee_hat <- sapply(data_group1, weighted.mean, w = w1_hat)
+  mean2_ponderee_hat <- sapply(data_group2, weighted.mean, w = w2_hat)
   mean_all_ponderee_hat <- mean(c(mean1_ponderee , mean2_ponderee))
   # Calcul de la distance entre chaque groupe selon la fonction de distance choisie
-  distance <- fonction_distance(mean1_ponderee,mean2_ponderee)
+  # Si on estime la taille de la commune on prend les pondérations w_hat sinon nous prenons w
+  ifelse(estimation_taille_commune,distance<-fonction_distance(mean1_ponderee,mean2_ponderee,w1_hat,w2_hat),
+         distance <- fonction_distance(mean1_ponderee,mean2_ponderee,w1,w2))
+  
   # On retourne la distance
   return(distance)
 }
@@ -575,7 +600,7 @@ distance_between_groups <- function(groups,i,j,fonction_distance) {
 
 ### Fonction de fusion des agrégats.
 
-Comme dans la plupart des packages dédiée au clustering hiérarhique, nous représentons notre partition par une liste de vecteurs. Chaque vecteur contient les identifiants des communes (ex: "1", "2" dans notre cas). Un agrégat est donc modélisé par un vecteur.
+Comme dans la plupart des packages dédiée au clustering hiérarchique, nous représentons notre partition par une liste de vecteurs. Chaque vecteur contient les identifiants des communes (ex: "1", "2" dans notre cas). Un agrégat est donc modélisé par un vecteur.
 Nous fusionnons donc 2 agrégats en concaténant les identifiants de communes de chaque agrégat dans un nouveau vecteur qui représente le nouvel agrégat et nous supprimons les 2 anciens vecteurs représentant les anciens agrégats.
 
 ```{r}
