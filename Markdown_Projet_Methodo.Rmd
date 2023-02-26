@@ -634,7 +634,8 @@ Correction inertie
 inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
   K <- length(groups)
   N <- nrow(data)
-  total_mean <- mean(data$donnee_contexte_commune)
+  # calcul non pas sur toutes les communes des données mais sur celles dans la partition
+  total_mean <- mean(filter(data, ID %in% groups)$donnee_contexte_commune)
   
   inter_group_var <- 0
   for (i in seq_len(K)) {
@@ -798,7 +799,7 @@ while (!convergence) {
         # Calcul de l'inertie inter-intra
         inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
         inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
-        inertie = inertie_inter #inertie_intra/inertie_inter
+        inertie = inertie_intra/inertie_inter
         # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
         liste_inertie <- append(liste_inertie,inertie)
         liste_groups[[length(liste_groups) + 1]] <- groups
