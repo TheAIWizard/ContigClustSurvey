@@ -832,7 +832,7 @@ while (!convergence) {
 }
 ```
 
-"Nous récupérons l'indice correspondant au minimum du rapport d'inertie intra-inter classes". C'est ce que nous aurions fait avec une CAH classique. Seulement, le gain d'inertie intra est inévitable. Nous récupérons donc la dernière partition.
+"Nous récupérons l'indice correspondant au minimum du rapport d'inertie intra-inter classes". C'est ce que nous aurions fait avec une CAH classique. Seulement, le gain d'inertie intra est inévitable. Nous récupérons donc la dernière partition. L'inertie inter semble diminuer ce qui n'est pas surprenant mais de manière peu importante et se stabilise au bout du même nombre d'itérations. Nous avons donc fait le choix de n'étudier que l'évolution de l'inertie intra.
 
 
 ```{r}
@@ -841,7 +841,7 @@ while (!convergence) {
 # On prend la première occurence du minimum pour avoir trop de classes inutiles
 min_inertie_donnee_contexte <- min(liste_inertie)
 indice_min_groupes_retenu <- which(liste_inertie == min_inertie_donnee_contexte, arr.ind = TRUE)
-indice_dernier_groupes_retenu <- mength(liste_inertie)
+indice_dernier_groupes_retenu <- length(liste_inertie)
 ```
 
 À partir de cet indice, nous récupérons la partition correspondant à ce minimum et nous affichons les résultats souhaités
