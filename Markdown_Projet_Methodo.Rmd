@@ -522,9 +522,9 @@ Nous pouvons donc calculer une fonction de distance euclidienne pondérée comme
 
 ```{r}
 distance_euclidienne_ponderee <- function(data_group1,data_group2,mean1_ponderee, mean2_ponderee,w1,w2) {
-  sqrt(sum(w1*w2*(mean1_ponderee - mean2_ponderee)^2)/(w1+w2))
+  sqrt(sum((mean1_ponderee - mean2_ponderee)^2))
 }
-}
+
 ```
 
 Mais nous pouvons faire mieux puisque nous pouvons modifier la distance de Ward.D2 de sorte à ce qu'elle prenne en compte la pondération pour les calculs des nouveaux barycentres : 
@@ -626,7 +626,7 @@ fusion_between_groups <- function(i,j) {
 
 Pour avoir la partition la plus homogène possible au sein de chaque classe et hétérogène entre les classes, nous définissons une fonction qui calcule les inertie inter et intra-classes d'une partition.
 
-```{r}
+```{r,eval=FALSE}
 inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
   K <- length(groups)
   N <- nrow(data)
@@ -645,6 +645,29 @@ inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
 }
 ```
 
+Correction inertie
+
+```{r}
+inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
+  K <- length(groups)
+  N <- nrow(data)
+  total_mean <- mean(data$donnee_contexte_commune)
+  
+  inter_group_var <- 0
+  for (i in seq_len(K)) {
+    group_mean <- mean(filter(data, ID %in% groups[[i]])$donnee_contexte_commune)
+    group_size <- length(filter(data, ID %in% groups[[i]]))
+    inter_group_var <- inter_group_var + group_size * (group_mean - total_mean)^2
+  }
+  
+  intra_group_var <- sum((data$donnee_contexte_commune - rep(sapply(groups, length), sapply(groups, length)))^2)
+  
+  return(list(inter = inter_group_var, intra = intra_group_var))
+}
+
+
+```
+
 # Initialisation de l'agrégation avec critère d'arrêt sur le nombre de répondants.
 
 ## Paramétrage de l'algorithme de clustering
@@ -657,7 +680,7 @@ Nous allons opérer un peu différemment. Notre objectif est de continuer à reg
 #Nombre maximum de répondants par agrégats
 nb_repondants_max <- 100
 #Fixation de l'écart absolu souhaité pour la stabilisation de l'inertie entre l'étape précédente et actuelle
-seuil_inertie <- 0.000001
+seuil_inertie <- 0.0000000000001 #0.000001
 #Fixation arbitraire de l'inertie précédente pour amorcer l'algorithme
 inertie_prec = 100000
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
@@ -792,7 +815,7 @@ while (!convergence) {
         # Calcul de l'inertie inter-intra
         inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
         inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
-        inertie = inertie_intra #/inertie_inter
+        inertie = inertie_inter/inertie_intra
         # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
         liste_inertie <- append(liste_inertie,inertie)
         liste_groups[[length(liste_groups) + 1]] <- groups
@@ -915,7 +938,7 @@ ggplot(df, aes(x = x_bin, y = y_bin, fill = as.factor(clusters))) +
   ggtitle("CAH avec contraintes de contiguité et nombre de répondants")
 ```
 
-## Autre proposition de datavisualisation : distinction des gros et petits clusters
+## Autre proposition de datavisualisation : detection des gros clusters
 
 ```{r}
 
@@ -927,7 +950,7 @@ is_big_cluster <- function(id, threshold) {
 
 # Seuil pour considérer un cluster comme "grand"
 #Disons qu'un agrégat est gros s'il a plus de 1 une commune pour commencer
-threshold <- 1
+threshold <- 5
 
 # Fonction pour assigner une couleur en fonction du numéro de carré et de la taille de son cluster
 color_fun_2 <- function(id) {
