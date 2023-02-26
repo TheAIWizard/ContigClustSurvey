@@ -332,6 +332,8 @@ agg_indiv_to_communes <- function(data)
 {data %>% group_by(ID,donnee_contexte_commune) %>% summarize(nb_repondants_commune = sum(inclusion_enquete),taille_commune=n(),somme_proba_inclusion_enquete=sum(proba_inclusion_enquete))
 }
 donnees_agg <- agg_indiv_to_communes(donnees)
+#conversion type de la colonne taille_commune
+donnees_agg$taille_commune <- as.numeric(donnees_agg$taille_commune)
 ```
 
 Les données sont fin prêtes pour l'agrégation.
@@ -494,7 +496,7 @@ Pour cela, nous choisissons une mesure de similarité très performante pour ré
 Pour expliquer brièvement le principe, elle mesure la variance totale des deux agrégats à fusionner. Elle est calculée en comparant la somme des carrés des distances de chaque point à son centre de gravité dans chaque agrégat. Cette distance mesure ainsi la différence entre la somme des carrés des distances de chaque objet dans le même agrégat et la somme des carrés des distances de chaque objet dans des agrégats différents.
 
 ```{r}
-distance_Ward.D2 <- function(datagroup1,datagroup2,mean1,mean2){
+distance_Ward.D2 <- function(data_group1,data_group2,mean1,mean2){
   # Calcul de la somme des carrés des écarts à la moyenne pour chaque groupe
   ssd1 <- sum((data_group1 - mean1) ^ 2)
   ssd2 <- sum((data_group2 - mean2) ^ 2)
@@ -519,27 +521,36 @@ Dans notre cas, nous allons simplement adapter le code en calculant une moyenne 
 Nous pouvons donc calculer une fonction de distance euclidienne pondérée comme ci-dessus comme recherché par Hisnard.
 
 ```{r}
-distance_euclidienne_ponderee <- function(datagroup1,datagroup2,mean1_ponderee1, mean1_ponderee2,w1,w2) {
+distance_euclidienne_ponderee <- function(data_group1,data_group2,mean1_ponderee, mean2_ponderee,w1,w2) {
   sqrt(sum(w1*w2*(mean1_ponderee - mean2_ponderee)^2)/(w1+w2))
+}
 }
 ```
 
-Mais nous pouvons faire mieux puisque nous pouvons modifier la distance de Ward.D2 de sorte à ce qu'elle prenne en compte la pondération : 
+Mais nous pouvons faire mieux puisque nous pouvons modifier la distance de Ward.D2 de sorte à ce qu'elle prenne en compte la pondération pour les calculs des nouveaux barycentres : 
 
 ```{r}
-distance_Ward.D2_ponderee <- function(datagroup1,datagroup2,mean1,mean2,w1,w2){
+distance_Ward.D2_ponderee <- function(data_group1,data_group2,mean1,mean2,w1,w2){
+  # Calcul du barycentre total
+  mean_all <- mean(c(mean1, mean2))
   # Calcul de la somme des carrés des écarts à la moyenne pondérée pour chaque groupe
   ssd1 <- sum(w1 * (data_group1 - mean1)^2)
   ssd2 <- sum(w2 * (data_group2 - mean2)^2)
   # Calcul de la somme des carrés des écarts à la moyenne pour tous les points
   ssd_all <- sum((c(data_group1,data_group2) - mean_all) ^ 2)
   # Calcul de la distance entre deux groupes pour la méthode ward.d2 pondérée
-  dist_between_groups <- ssd_all + w1*w2*(mean1-mean2)^2/(w1+w2)
-  return(sqrt(dist_between_groups / ((length(data_group1)+length(data_group2)))))
+   dist_between_groups <- ssd_all - (ssd1 + ssd2)
+  return(sqrt(abs(dist_between_groups)*(length(data_group1) * length(data_group2)) / ((length(data_group1) + length(data_group2)))))
   
 }
 ```
 
+La fonction ressemble beaucoup à sa version non-pondérée.
+
+Nous pondérons la distance de Ward.D2 entre les deux groupes par le nombre d'éléments dans chaque groupe en utilisant directement les moyennes déjà pondérées.
+Enfin, nous avons utilisé ces sommes des carrés des écarts pour calculer la distance entre les deux groupes, en pondérant le résultat par la taille des groupes combinés pour donner plus de poids aux distances entre les groupes qui ont plus de points. Cela permet de mieux refléter la similarité entre les groupes, en prenant en compte leur taille respective.
+
+Remarque: il est rare mais possible d'avoir la somme des carrés des écarts à la moyenne pour l'ensemble des points (ssd_all) est inférieure à la somme des carrés des écarts à la moyenne pour les deux groupes combinés (ssd1 + ssd2). Cela peut se produire si les deux groupes ont des variances très différentes ou si les points sont très proches de leur moyenne globale. D'où la mise en valeur absolue de cette quantité.
 
 Ainsi, nous pouvons normaliser par la taille des communes en agrégeant les individus par commune pour compter le nombre de points dans chaque carré. 
 
@@ -576,20 +587,19 @@ distance_between_groups <- function(groups,i,j,fonction_distance,estimation_tail
   # Recacul des barycentres (version sans pondération)
   mean1 <- mean(data_group1)
   mean2 <- mean(data_group2)
-  mean_all <- mean(c(mean(data_group1), mean(data_group2)))
   # Calcul des moyennes pondérées par la taille des communes chaque agrégat
-  mean1_ponderee <- sapply(data_group1, weighted.mean, w = w1)
-  mean2_ponderee <- sapply(data_group2, weighted.mean, w = w2)
-  mean_all_ponderee <- mean(c(mean1_ponderee , mean2_ponderee))
+  mean1_ponderee <- weighted.mean(data_group1,w1)
+  mean2_ponderee <- weighted.mean(data_group2,w2)
   # Calcul des moyennes pondérées par la taille des communes estimée chaque agrégat
   #si nous ne disposons pas des tailles des communes
-  mean1_ponderee_hat <- sapply(data_group1, weighted.mean, w = w1_hat)
-  mean2_ponderee_hat <- sapply(data_group2, weighted.mean, w = w2_hat)
-  mean_all_ponderee_hat <- mean(c(mean1_ponderee , mean2_ponderee))
+  mean1_ponderee_hat <- weighted.mean(data_group1,w1_hat)
+  mean2_ponderee_hat <- weighted.mean(data_group2,w2_hat)
   # Calcul de la distance entre chaque groupe selon la fonction de distance choisie
   # Si on estime la taille de la commune on prend les pondérations w_hat sinon nous prenons w
-  ifelse(estimation_taille_commune,distance<-fonction_distance(mean1_ponderee,mean2_ponderee,w1_hat,w2_hat),
-         distance <- fonction_distance(mean1_ponderee,mean2_ponderee,w1,w2))
+  ifelse(estimation_taille_commune,distance<-fonction_distance(data_group1,data_group2,
+                                                               mean1_ponderee,mean2_ponderee,w1_hat,w2_hat),
+         distance <- fonction_distance(data_group1,data_group2,
+                                       mean1_ponderee,mean2_ponderee,w1,w2))
   
   # On retourne la distance
   return(distance)
@@ -782,7 +792,7 @@ while (!convergence) {
         # Calcul de l'inertie inter-intra
         inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
         inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
-        inertie = inertie_intra/inertie_inter
+        inertie = inertie_intra #/inertie_inter
         # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
         liste_inertie <- append(liste_inertie,inertie)
         liste_groups[[length(liste_groups) + 1]] <- groups
