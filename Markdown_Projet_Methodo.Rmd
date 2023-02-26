@@ -626,9 +626,11 @@ fusion_between_groups <- function(i,j) {
 
 Pour avoir la partition la plus homogène possible au sein de chaque classe et hétérogène entre les classes, nous définissons une fonction qui calcule les inertie inter et intra-classes d'une partition.
 
-Il faut adapter le calcul
+Il faut adapter le calcul classique de l'inertie en calculant le barycentre total sur les communes qui sont présentes dans la partition obtenue par CAH avec contraintes.
 
-Correction inertie
+Lorsqu'on impose des contraintes sur la structure des groupes (par exemple, en utilisant des contraintes de contiguïté spatiale ou de non-mélange de certaines classes), cela peut entraîner une réduction de l'inertie inter-groupe, car certains groupes qui seraient naturellement séparés sont forcés d'être regroupés.
+
+Il est donc judicieux d'observer séparemment l'évolution des inerties intra et inter classes plutôt que regarder tout de suite le rapport intra-inter. Cela pourrait donner des idées de métrique d'inertie à évaluer.
 
 ```{r}
 inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
