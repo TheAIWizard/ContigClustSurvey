@@ -1354,7 +1354,9 @@ partitions, la matrice de similarité ainsi que la liste des inerties.
 \NormalTok{    convergence }\OtherTok{=} \ConstantTok{TRUE}
     \FunctionTok{print}\NormalTok{(}\StringTok{"CONVERGENCE !!!"}\NormalTok{)}
 \NormalTok{  \}}
-  \FunctionTok{cat}\NormalTok{(}\StringTok{"Inertie précédente:"}\NormalTok{,inertie\_prec,}\StringTok{"Inertie suivante:"}\NormalTok{,inertie,}\StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{)}
+  \FunctionTok{cat}\NormalTok{(}\StringTok{"Inertie précédente:"}\NormalTok{,inertie\_prec,}\StringTok{"Inertie actuelle considérée:"}\NormalTok{,inertie,}\StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{)}
+  \FunctionTok{cat}\NormalTok{(}\StringTok{"Inertie intra{-}classes:"}\NormalTok{,inertie\_intra,}\StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{)}
+  \FunctionTok{cat}\NormalTok{(}\StringTok{"Inertie inter{-}classes:"}\NormalTok{,inertie\_inter,}\StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{)}
   \CommentTok{\# mise à jour de la variable d\textquotesingle{}inertie précédente}
 \NormalTok{  inertie\_prec }\OtherTok{=}\NormalTok{ inertie}
 \NormalTok{\}}
@@ -1363,15 +1365,25 @@ partitions, la matrice de similarité ainsi que la liste des inerties.
 
 \begin{verbatim}
 ## Nombre de répondants du cluster actuellement fusionné : 0 
-## Inertie précédente: 1e+05 Inertie suivante: 28.94339 
+## Inertie précédente: 1e+05 Inertie actuelle considérée: 28.94339 
+## Inertie intra-classes: 28.94339 
+## Inertie inter-classes: 31.93199 
 ## Nombre de répondants du cluster actuellement fusionné : 34 
-## Inertie précédente: 28.94339 Inertie suivante: 32.54971 
+## Inertie précédente: 28.94339 Inertie actuelle considérée: 32.54971 
+## Inertie intra-classes: 32.54971 
+## Inertie inter-classes: 31.91475 
 ## Nombre de répondants du cluster actuellement fusionné : 10 
-## Inertie précédente: 32.54971 Inertie suivante: 37.34747 
+## Inertie précédente: 32.54971 Inertie actuelle considérée: 37.34747 
+## Inertie intra-classes: 37.34747 
+## Inertie inter-classes: 31.62812 
 ## Nombre de répondants du cluster actuellement fusionné : 91 
-## Inertie précédente: 37.34747 Inertie suivante: 50.40526 
+## Inertie précédente: 37.34747 Inertie actuelle considérée: 50.40526 
+## Inertie intra-classes: 50.40526 
+## Inertie inter-classes: 31.59354 
 ## [1] "CONVERGENCE !!!"
-## Inertie précédente: 50.40526 Inertie suivante: 50.40526
+## Inertie précédente: 50.40526 Inertie actuelle considérée: 50.40526 
+## Inertie intra-classes: 50.40526 
+## Inertie inter-classes: 31.59354
 \end{verbatim}
 
 ``Nous récupérons l'indice correspondant au minimum du rapport d'inertie

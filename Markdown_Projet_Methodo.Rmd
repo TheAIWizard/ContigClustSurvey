@@ -3,8 +3,8 @@ title: "Agrégation géographique avec contrainte de contiguïté"
 author: "Rym Boulassel, Pierre Le Maux , Nathan Randriamanana"
 date: "2023-02-21"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 Le code qui suit présente une proposition d'implémentation d'une agrégation géographique avec contrainte de contiguïté prenant en compte un critère d'arrêt sur la taille du nombre de répondants d'une enquête pour chaque agrégat, lors du processus d'agrégation.
@@ -305,15 +305,16 @@ p_enquete <- ggplot(df[df$inclusion_enquete == 1, ], aes(x, y)) +
   theme_classic() +
   scale_y_reverse() +
   theme(plot.background = element_rect(fill = "white"),
-        panel.grid.major = element_blank(),
+        panel.grid = element_line(color = "black",size = square_side_length/x_max,linetype = 1),
+        panel.grid.major = element_line(color = "black",size = square_side_length/x_max,linetype = 1),
         panel.grid.minor = element_line(color = "black",size = square_side_length/x_max,linetype = 1),
         axis.line = element_blank(),
         axis.text = element_blank(),
         axis.ticks = element_blank(),
         plot.margin = unit(c(0, 0, 0, 0), "cm")) +
   # numérotation des carrés
-  geom_text(aes(x = (x_bin - 0.5) * square_side_length, 
-                y = (y_bin - 0.5) * square_side_length,
+  geom_text(aes(x = (x_bin - 0.3) * square_side_length, 
+                y = (y_bin - 0.3) * square_side_length,
                 label = square_id, size=6), 
             color = "red", 
             size = 5,
@@ -538,8 +539,8 @@ distance_Ward.D2_ponderee <- function(data_group1,data_group2,mean1,mean2,w1,w2)
   # Calcul de la somme des carrés des écarts à la moyenne pondérée pour chaque groupe
   ssd1 <- sum(w1 * (data_group1 - mean1)^2)
   ssd2 <- sum(w2 * (data_group2 - mean2)^2)
-  # Calcul de la somme des carrés des écarts à la moyenne pour tous les points
-  ssd_all <- sum((c(data_group1,data_group2) - mean_all) ^ 2)
+  # Calcul de la somme des carrés des écarts à la moyenne pondérée pour tous les points
+  ssd_all <- sum((c(w1*data_group1,w2*data_group2) - mean_all) ^ 2)
   # Calcul de la distance entre deux groupes pour la méthode ward.d2 pondérée
    dist_between_groups <- ssd_all - (ssd1 + ssd2)
   return(sqrt(abs(dist_between_groups)*(length(data_group1) * length(data_group2)) / ((length(data_group1) + length(data_group2)))))
@@ -682,7 +683,7 @@ nb_repondants_max <- 100
 #Fixation de l'écart absolu souhaité pour la stabilisation de l'inertie entre l'étape précédente et actuelle
 seuil_inertie <- 0.0000000000001 #0.000001
 #Fixation arbitraire de l'inertie précédente pour amorcer l'algorithme
-inertie_prec = 100000
+inertie_prec = Inf
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 #choix de la fonction de distance à appliquer
