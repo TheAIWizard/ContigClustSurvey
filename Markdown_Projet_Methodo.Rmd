@@ -858,7 +858,7 @@ cat("Le rapport d'inertie obtenu sur les données de contexte correspondant vaut
 
 Nous présentons un pseudo-dendrogramme sommaire pour représenter les compositions des agrégats obtenus. Pour avoir un dendrogramme complet il est possible de transformer la partition obtenue en objet hclust et d'utiliser le package approprié mais le gain en terme de visualisation ne nous semblait pas suffisant par rapport au temps dont nous disposions.
 
-Le nombre de communes pouvant s'afficher peut être nombreux nous allons donc ne faire apparaître que les agrégats comportant plus d'une commune
+Le nombre de communes pouvant s'afficher peut être nombreux nous allons donc ne faire apparaître que les agrégats comportant plus d'une seule commune.
 
 ```{r,echo=FALSE}
 # Représentation dendrogramme à partir des hauteurs et des clusters (encore à développer)
@@ -871,8 +871,8 @@ dend <- hclust(as.dist(dist_mat_hclust))
 # Extraire les clusters de la liste et les rajouter en labels des clusters
 labels(dend) <- lapply(agregats_donnee_contexte_repondant, function(x) if (length(x) > 1) x[1:length(x)])
 #lapply(agregats_donnee_contexte_repondant, function(x) x[1:length(x)])
-# supprimer les labels contenant NULL
-labels(dend) <- lapply(labels(dend), function(x) ifelse(is.null(x), "", x))
+# Remplacer les labels NULL par une chaîne de caractères vide
+labels(dend) <- labels(dend)%>% lapply(function(x) ifelse(x=='NULL', "", x))
 # Afficher le dendrogramme
 plot(dend)
 ```
