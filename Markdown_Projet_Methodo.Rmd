@@ -562,6 +562,11 @@ C'est une innovation de notre travail, nous reprenons le même principe en prena
 
 Au lieu de renseigner les tailles de commune comme pondération dans les fonctions de distances pondérées, on renseigne les tailles de commune **estimées** comme facteur de pondération
 
+#### Autres questions: l'impact des contraintes sur l'inertie et le rôle de la distance
+
+Comme mentionné dans le papier d'Isnard, "l'agrégation de 2 classes se traduit toujours par une augmentation de la variance intra, sauf si les deux moyennes coïncident".
+
+La contrainte de contiguïté peut en quelque sorte forcer des individus moins ressemblant à s'associer, ce qui augmente l'inertie intra. La distance peut avoir un rôle à jouer pour limiter cet effet. Nous pourrions utiliser la distance euclidienne non pondérée par les tailles des communes, en ajoutant un petit terme de pénalité pour les paires de groupes qui ne respectent pas la contrainte de contiguïté. Ce terme de pénalité peut être ajusté pour contrôler l'impact de la contrainte sur la CAH.
 
 ### Implémentation générale du calcul de distance entre agrégats suivant la fonction de distance choisie
 
@@ -672,8 +677,10 @@ inertie_prec = 100000
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 #choix de la fonction de distance à appliquer
-fonction_distance <- distance_Ward.D2_ponderee
+fonction_distance <- distance_euclidienne_ponderee#distance_Ward.D2_ponderee
 ```
+
+Le processus d'agrégation s'arrête plus vite avec une distance euclidienne pondérée plutôt que Ward.D2 pondérée
 
 ## Initialisation de la partition
 
@@ -801,7 +808,7 @@ while (!convergence) {
         # Calcul de l'inertie inter-intra
         inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
         inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
-        inertie = inertie_intra/inertie_inter
+        inertie = inertie_intra#inertie_intra/inertie_inter
         # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
         liste_inertie <- append(liste_inertie,inertie)
         liste_groups[[length(liste_groups) + 1]] <- groups
