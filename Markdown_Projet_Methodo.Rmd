@@ -281,7 +281,7 @@ donnees_subsampled$proba_inclusion <- donnees_subsampled$donnee_contexte_commune
 
 ### Définition des zones d'absence d'enquêté
 
-Nous définissons des zones très vides au niveau de l'enquête pour observer comment ces zones particulières seront agrégées. L'intérêt est d'observer s'il est possible d'obtenir un gros agrégat sans répondants. Que faire si cela arrive ?
+Nous définissons des zones très vides au niveau de l'enquête pour observer comment ces zones particulières seront agrégées. L'intérêt est d'observer s'il est possible d'obtenir un gros agrégat sans répondants. Que faire si cela arrive ? Il semble que cela n'arrive pas pour notre algorithme.
 
 Nous définissons la zone manuellement pour être sûr d'avoir un bloc d'absence de répondants mais il est possible d'automatiser en prenant un certain nombre de communes voisines ne se trouvant pas en métropole ou dans d'autres zones souhaitées. Si c'est ce que l'on souhaite, l'utilisateur doit créer une variable d'appartenance à une métropole et reprendre le principe de notre ligne de code ci-dessous.
 On souhaite qu'en donnant une proportion
@@ -626,24 +626,7 @@ fusion_between_groups <- function(i,j) {
 
 Pour avoir la partition la plus homogène possible au sein de chaque classe et hétérogène entre les classes, nous définissons une fonction qui calcule les inertie inter et intra-classes d'une partition.
 
-```{r,eval=FALSE}
-inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
-  K <- length(groups)
-  N <- nrow(data)
-  total_mean <- mean(data$donnee_contexte_commune)
-  
-  inter_group_var <- 0
-  for (i in seq_len(K)) {
-    group_mean <- mean(filter(data, ID %in% groups[[i]])$donnee_contexte_commune)
-    group_size <- nrow(filter(data, ID %in% groups[[i]]))
-    inter_group_var <- inter_group_var + group_size * (group_mean - total_mean)^2
-  }
-  
-  intra_group_var <- sum((data$donnee_contexte_commune - total_mean)^2)
-  
-  return(list(inter = inter_group_var, intra = intra_group_var))
-}
-```
+Il faut adapter le calcul
 
 Correction inertie
 
