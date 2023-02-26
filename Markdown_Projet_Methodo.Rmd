@@ -815,7 +815,7 @@ while (!convergence) {
         # Calcul de l'inertie inter-intra
         inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
         inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
-        inertie = inertie_inter/inertie_intra
+        inertie = inertie_inter #inertie_intra/inertie_inter
         # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
         liste_inertie <- append(liste_inertie,inertie)
         liste_groups[[length(liste_groups) + 1]] <- groups
