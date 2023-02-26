@@ -2,7 +2,9 @@
 title: "Agrégation géographique avec contrainte de contiguïté"
 author: "Rym Boulassel, Pierre Le Maux , Nathan Randriamanana"
 date: "2023-02-21"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 Le code qui suit présente une proposition d'implémentation d'une agrégation géographique avec contrainte de contiguïté prenant en compte un critère d'arrêt sur la taille du nombre de répondants d'une enquête pour chaque agrégat, lors du processus d'agrégation.
@@ -826,7 +828,9 @@ while (!convergence) {
     convergence = TRUE
     print("CONVERGENCE !!!")
   }
-  cat("Inertie précédente:",inertie_prec,"Inertie suivante:",inertie,"\n")
+  cat("Inertie précédente:",inertie_prec,"Inertie actuelle considérée:",inertie,"\n")
+  cat("Inertie intra-classes:",inertie_intra,"\n")
+  cat("Inertie inter-classes:",inertie_inter,"\n")
   # mise à jour de la variable d'inertie précédente
   inertie_prec = inertie
 }
