@@ -568,6 +568,8 @@ Comme mentionné dans le papier d'Isnard, "l'agrégation de 2 classes se traduit
 
 La contrainte de contiguïté peut en quelque sorte forcer des individus moins ressemblant à s'associer, ce qui augmente l'inertie intra. La distance peut avoir un rôle à jouer pour limiter cet effet. Nous pourrions utiliser la distance euclidienne non pondérée par les tailles des communes, en ajoutant un petit terme de pénalité pour les paires de groupes qui ne respectent pas la contrainte de contiguïté. Ce terme de pénalité peut être ajusté pour contrôler l'impact de la contrainte sur la CAH.
 
+Nous n'avons pas pu implémenter cette partie mais nous relevons cette piste de réflexion.
+
 ### Implémentation générale du calcul de distance entre agrégats suivant la fonction de distance choisie
 
 Pour regrouper les communes qui se ressemblent, nous définissons une mesure de similarité entre 2 agrégats. Nous considérons la convention suivante pour faciliter l'implémentation: deux communes sont respectivement vues comme deux agrégats qui contiennent chacun une unique commune. Cela reste cohérent puisque si chaque agrégat ne contient qu'un seul élément, la fonction distance_between_groups doit retourner une des fonctions définies précedemment entre ces deux éléments. Nous avons donc une fonction qui généralise la notion de distance entre les communes et les agrégats.
@@ -636,6 +638,11 @@ Il faut adapter le calcul classique de l'inertie en calculant le barycentre tota
 Lorsqu'on impose des contraintes sur la structure des groupes (par exemple, en utilisant des contraintes de contiguïté spatiale ou de non-mélange de certaines classes), cela peut entraîner une réduction de l'inertie inter-groupe, car certains groupes qui seraient naturellement séparés sont forcés d'être regroupés.
 
 Il est donc judicieux d'observer séparemment l'évolution des inerties intra et inter classes plutôt que regarder tout de suite le rapport intra-inter. Cela pourrait donner des idées de métrique d'inertie à évaluer.
+
+En effet, comme mentionné dans le papier d'Isnard, "l'agrégation de 2 classes se traduit toujours par une augmentation de la variance intra, sauf si les deux moyennes coïncident".
+
+Dans ce même papier, il est ainsi expliquer qu'on cherche à agréger les agrégats réalisant le minimum de gain d'inertie. Ici, nous implémentons la manière de récupérer les différentes inerties mais nous concluons que *le but est donc de récupérer non pas un minimum d'inertie intra mais un minimum de GAIN d'inertie intra*.
+La distance de Ward.D2 effectue cela.
 
 ```{r}
 inertie_inter_intra_donnee_contexte_commune <- function(data, groups) {
@@ -972,4 +979,5 @@ ggplot(df, aes(x = x_bin, y = y_bin, fill = as.factor(clusters))) +
 
 Une critique possible est qu'une coloration de la grille n'est peut-être pas optimale ou suffisante en terme de visualisation. Il faudrait peut être définir des contours de couleurs à la place.
 Comme la partition sera fine de toute manière il peut être intéressant de ne colorer que les clusters qui regroupe plusieurs communes pour limiter la complexité visuelle de l'afichage.
-
+ 
+# Relâchement sur la contrainte de taille
