@@ -681,13 +681,13 @@ Nous allons opérer un peu différemment. Notre objectif est de continuer à reg
 #Nombre maximum de répondants par agrégats
 nb_repondants_max <- 100
 #Fixation de l'écart absolu souhaité pour la stabilisation de l'inertie entre l'étape précédente et actuelle
-seuil_inertie <- 0.0000000000001 #0.000001
+seuil_inertie <- 0.000001 #0.0000000000001 #0.000001
 #Fixation arbitraire de l'inertie précédente pour amorcer l'algorithme
 inertie_prec = Inf
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 #choix de la fonction de distance à appliquer
-fonction_distance <- distance_euclidienne_ponderee#distance_Ward.D2_ponderee
+fonction_distance <- distance_euclidienne_ponderee #distance_Ward.D2_ponderee
 ```
 
 Le processus d'agrégation s'arrête plus vite avec une distance euclidienne pondérée plutôt que Ward.D2 pondérée
@@ -818,7 +818,7 @@ while (!convergence) {
         # Calcul de l'inertie inter-intra
         inertie_inter <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$inter
         inertie_intra <- inertie_inter_intra_donnee_contexte_commune(donnees_agg, groups)$intra
-        inertie = inertie_intra#inertie_intra/inertie_inter
+        inertie = inertie_intra/inertie_inter #inertie_intra
         # Sauvegarde du groupe et de l'inertie correspondante à chaque groupe formé/supprimé
         liste_inertie <- append(liste_inertie,inertie)
         liste_groups[[length(liste_groups) + 1]] <- groups

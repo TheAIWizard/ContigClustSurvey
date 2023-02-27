@@ -877,8 +877,8 @@ les calculs des nouveaux barycentres :
   \CommentTok{\# Calcul de la somme des carrés des écarts à la moyenne pondérée pour chaque groupe}
 \NormalTok{  ssd1 }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{(w1 }\SpecialCharTok{*}\NormalTok{ (data\_group1 }\SpecialCharTok{{-}}\NormalTok{ mean1)}\SpecialCharTok{\^{}}\DecValTok{2}\NormalTok{)}
 \NormalTok{  ssd2 }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{(w2 }\SpecialCharTok{*}\NormalTok{ (data\_group2 }\SpecialCharTok{{-}}\NormalTok{ mean2)}\SpecialCharTok{\^{}}\DecValTok{2}\NormalTok{)}
-  \CommentTok{\# Calcul de la somme des carrés des écarts à la moyenne pour tous les points}
-\NormalTok{  ssd\_all }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{((}\FunctionTok{c}\NormalTok{(data\_group1,data\_group2) }\SpecialCharTok{{-}}\NormalTok{ mean\_all) }\SpecialCharTok{\^{}} \DecValTok{2}\NormalTok{)}
+  \CommentTok{\# Calcul de la somme des carrés des écarts à la moyenne pondérée pour tous les points}
+\NormalTok{  ssd\_all }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{((}\FunctionTok{c}\NormalTok{(w1}\SpecialCharTok{*}\NormalTok{data\_group1,w2}\SpecialCharTok{*}\NormalTok{data\_group2) }\SpecialCharTok{{-}}\NormalTok{ mean\_all) }\SpecialCharTok{\^{}} \DecValTok{2}\NormalTok{)}
   \CommentTok{\# Calcul de la distance entre deux groupes pour la méthode ward.d2 pondérée}
 \NormalTok{   dist\_between\_groups }\OtherTok{\textless{}{-}}\NormalTok{ ssd\_all }\SpecialCharTok{{-}}\NormalTok{ (ssd1 }\SpecialCharTok{+}\NormalTok{ ssd2)}
   \FunctionTok{return}\NormalTok{(}\FunctionTok{sqrt}\NormalTok{(}\FunctionTok{abs}\NormalTok{(dist\_between\_groups)}\SpecialCharTok{*}\NormalTok{(}\FunctionTok{length}\NormalTok{(data\_group1) }\SpecialCharTok{*} \FunctionTok{length}\NormalTok{(data\_group2)) }\SpecialCharTok{/}\NormalTok{ ((}\FunctionTok{length}\NormalTok{(data\_group1) }\SpecialCharTok{+} \FunctionTok{length}\NormalTok{(data\_group2)))))}
@@ -1116,13 +1116,13 @@ inertie inter-intra classe.
 \CommentTok{\#Nombre maximum de répondants par agrégats}
 \NormalTok{nb\_repondants\_max }\OtherTok{\textless{}{-}} \DecValTok{100}
 \CommentTok{\#Fixation de l\textquotesingle{}écart absolu souhaité pour la stabilisation de l\textquotesingle{}inertie entre l\textquotesingle{}étape précédente et actuelle}
-\NormalTok{seuil\_inertie }\OtherTok{\textless{}{-}} \FloatTok{0.0000000000001} \CommentTok{\#0.000001}
+\NormalTok{seuil\_inertie }\OtherTok{\textless{}{-}} \FloatTok{0.000001} \CommentTok{\#0.0000000000001 \#0.000001}
 \CommentTok{\#Fixation arbitraire de l\textquotesingle{}inertie précédente pour amorcer l\textquotesingle{}algorithme}
-\NormalTok{inertie\_prec }\OtherTok{=} \DecValTok{100000}
+\NormalTok{inertie\_prec }\OtherTok{=} \ConstantTok{Inf}
 \CommentTok{\#Fixation de l\textquotesingle{}état de convergence à FALSE tant que le processus d\textquotesingle{}agrégation ne se termine pas}
 \NormalTok{convergence }\OtherTok{=} \ConstantTok{FALSE}
 \CommentTok{\#choix de la fonction de distance à appliquer}
-\NormalTok{fonction\_distance }\OtherTok{\textless{}{-}}\NormalTok{ distance\_euclidienne\_ponderee}\CommentTok{\#distance\_Ward.D2\_ponderee}
+\NormalTok{fonction\_distance }\OtherTok{\textless{}{-}}\NormalTok{ distance\_euclidienne\_ponderee }\CommentTok{\#distance\_Ward.D2\_ponderee}
 \end{Highlighting}
 \end{Shaded}
 
@@ -1343,7 +1343,7 @@ partitions, la matrice de similarité ainsi que la liste des inerties.
         \CommentTok{\# Calcul de l\textquotesingle{}inertie inter{-}intra}
 \NormalTok{        inertie\_inter }\OtherTok{\textless{}{-}} \FunctionTok{inertie\_inter\_intra\_donnee\_contexte\_commune}\NormalTok{(donnees\_agg, groups)}\SpecialCharTok{$}\NormalTok{inter}
 \NormalTok{        inertie\_intra }\OtherTok{\textless{}{-}} \FunctionTok{inertie\_inter\_intra\_donnee\_contexte\_commune}\NormalTok{(donnees\_agg, groups)}\SpecialCharTok{$}\NormalTok{intra}
-\NormalTok{        inertie }\OtherTok{=}\NormalTok{ inertie\_intra}\CommentTok{\#inertie\_intra/inertie\_inter}
+\NormalTok{        inertie }\OtherTok{=}\NormalTok{ inertie\_intra}\SpecialCharTok{/}\NormalTok{inertie\_inter }\CommentTok{\#inertie\_intra}
         \CommentTok{\# Sauvegarde du groupe et de l\textquotesingle{}inertie correspondante à chaque groupe formé/supprimé}
 \NormalTok{        liste\_inertie }\OtherTok{\textless{}{-}} \FunctionTok{append}\NormalTok{(liste\_inertie,inertie)}
 \NormalTok{        liste\_groups[[}\FunctionTok{length}\NormalTok{(liste\_groups) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{]] }\OtherTok{\textless{}{-}}\NormalTok{ groups}
@@ -1365,23 +1365,23 @@ partitions, la matrice de similarité ainsi que la liste des inerties.
 
 \begin{verbatim}
 ## Nombre de répondants du cluster actuellement fusionné : 0 
-## Inertie précédente: 1e+05 Inertie actuelle considérée: 28.94339 
+## Inertie précédente: Inf Inertie actuelle considérée: 0.9064073 
 ## Inertie intra-classes: 28.94339 
 ## Inertie inter-classes: 31.93199 
 ## Nombre de répondants du cluster actuellement fusionné : 34 
-## Inertie précédente: 28.94339 Inertie actuelle considérée: 32.54971 
+## Inertie précédente: 0.9064073 Inertie actuelle considérée: 1.019896 
 ## Inertie intra-classes: 32.54971 
 ## Inertie inter-classes: 31.91475 
 ## Nombre de répondants du cluster actuellement fusionné : 10 
-## Inertie précédente: 32.54971 Inertie actuelle considérée: 37.34747 
+## Inertie précédente: 1.019896 Inertie actuelle considérée: 1.180831 
 ## Inertie intra-classes: 37.34747 
 ## Inertie inter-classes: 31.62812 
 ## Nombre de répondants du cluster actuellement fusionné : 91 
-## Inertie précédente: 37.34747 Inertie actuelle considérée: 50.40526 
+## Inertie précédente: 1.180831 Inertie actuelle considérée: 1.595429 
 ## Inertie intra-classes: 50.40526 
 ## Inertie inter-classes: 31.59354 
 ## [1] "CONVERGENCE !!!"
-## Inertie précédente: 50.40526 Inertie actuelle considérée: 50.40526 
+## Inertie précédente: 1.595429 Inertie actuelle considérée: 1.595429 
 ## Inertie intra-classes: 50.40526 
 ## Inertie inter-classes: 31.59354
 \end{verbatim}
@@ -1477,7 +1477,7 @@ minimum et nous affichons les résultats souhaités
 \end{Shaded}
 
 \begin{verbatim}
-## Le rapport d'inertie obtenu sur les données de contexte correspondant vaut: 28.94339
+## Le rapport d'inertie obtenu sur les données de contexte correspondant vaut: 0.9064073
 \end{verbatim}
 
 \hypertarget{affichage-et-mise-en-forme-du-ruxe9sultat-de-lagruxe9gation}{%
