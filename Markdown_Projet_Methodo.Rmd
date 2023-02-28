@@ -687,7 +687,7 @@ inertie_prec = Inf
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 #choix de la fonction de distance à appliquer
-fonction_distance <- distance_euclidienne_ponderee #distance_Ward.D2_ponderee
+fonction_distance <- distance_euclidienne_ponderee #distance_Ward.D2_ponderee #
 ```
 
 Le processus d'agrégation s'arrête plus vite avec une distance euclidienne pondérée plutôt que Ward.D2 pondérée
@@ -923,8 +923,7 @@ my_palette <- colorRampPalette(colors)(100)
 palette <- c("red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "gray",
                "darkred", "darkorange", "gold", "darkgreen", "navyblue", "violet", "saddlebrown", "darkgray", 
                "maroon", "tomato", "khaki", "skyblue", "slategray", "orchid", "sienna", "dimgray", "dimgrey","coral", "lemonchiffon", "limegreen", "cornflowerblue", "mediumorchid", "mediumslateblue", "sienna", "rosybrown", "lightslategray")
-               
-palette <- my_palette
+         
 # Fonction pour assigner une couleur en fonction du numéro de carré
 color_fun <- function(id) {return(palette[id])}
 color_fun_2 <- function(id) {
@@ -938,17 +937,20 @@ color_fun_2 <- function(id) {
 # Assigner une couleur à chaque carré
 color <- sapply(clusters, color_fun_2)
 # Convertir au bon format pour l'affichage
-color <- as.vector(as.matrix(color)[,1])
+#color <- as.vector(as.matrix(color)[,1])
 
 df <- data.frame(x_bin = rep(1: nb_cols_squares, nb_cols_squares), 
-                 y_bin = rep(nb_cols_squares:1, each = nb_cols_squares), 
+                 y_bin = rep(nb_cols_squares:1,each = nb_cols_squares), 
                  color = color)
 
 ggplot(df, aes(x = x_bin, y = y_bin, fill = as.factor(clusters))) +
-  geom_tile(color = "black") +
+  geom_tile(color = "black",width = 0.95, height = 0.95) +
   scale_fill_manual(values = color) +
-  theme_void() +
+  theme_void() 
+  
   ggtitle("CAH avec contraintes de contiguité et nombre de répondants")
+ggsave("Dataviz_CAH_Ward")
+  
 ```
 
 ## Autre proposition de datavisualisation : detection des gros clusters
