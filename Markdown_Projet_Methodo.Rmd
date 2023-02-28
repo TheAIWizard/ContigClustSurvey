@@ -242,6 +242,8 @@ Autre avantage du tirage à deux degrés: améliorer l'estimation de la taille d
 
 Nous créons donc une variable binaire "inclusion_enquete" qui renseigne si un individu est sélectionné dans l'enquête.
 
+Nous induisons une corrélation positive entre la proportion étudiée (donnée de contexte) et le nombre de répondants pour simuler un comportement particulier (pouvant être sociologique) de la population : par exemple le fait qu'il y ait une propension à répondre à l'enquête pour les gens ayant une valeur plus élevée de la donnée de contexte considérée.s
+
 ####  Implémentation de la première option de tirage (non exécutée: eval=FALSE)
 
 ```{r ,eval=TRUE}
@@ -260,39 +262,47 @@ cat("Le nombre d'individus enquêté est de", dim(echantillon)[1])
 
 ####Implémentation de la seconde option de tirage
 
-```{r,eval =FALSE}
-# Nombre d'unités primaires à tirer, ici les communes
-n_up_sample <- 10
+Pour effectuer un tirage à deux degrés, nous reprenons exactement le même principe en filtrant sur les lignes correspondantes à celles se trouvant dans les unités primaires sélectionnées. Pour cela, nous créons une indicatrice de sélection de l'individu en tant qu'unité secondaire localisée dans l'unité primaire sélectionnée.
 
-# Tirage des unités primaires au hasard
-set.seed(123) # pour reproduire les résultats
-up_sample <- sample(unique(donnees$ID), n_up_sample)
+##### Définition des zones d'absence d'enquêté
 
-# Sous-échantillonnage des unités secondaires pour chaque unité primaire sélectionnée
-donnees_subsampled <- donnees %>%
-  filter(ID %in% up_sample) %>%
-  group_by(ID) %>%
-  sample_n(ceiling(0.5 * n()))
-
-# Calcul des probabilités d'inclusion pour chaque unité secondaire
-donnees_subsampled$proba_inclusion <- donnees_subsampled$donnee_contexte_commune
-
-
-
-```
-
-### Définition des zones d'absence d'enquêté
+Cela nous permet de définir un pourcentage de communes sans-répondants. À partir de cette information, nous en déduisons le pourcentage de communes possédant des répondants à l'enquête. L'utilisateur peut modifier cette valeur.
 
 Nous définissons des zones très vides au niveau de l'enquête pour observer comment ces zones particulières seront agrégées. L'intérêt est d'observer s'il est possible d'obtenir un gros agrégat sans répondants. Que faire si cela arrive ? Il semble que cela n'arrive pas pour notre algorithme.
 
-Nous définissons la zone manuellement pour être sûr d'avoir un bloc d'absence de répondants mais il est possible d'automatiser en prenant un certain nombre de communes voisines ne se trouvant pas en métropole ou dans d'autres zones souhaitées. Si c'est ce que l'on souhaite, l'utilisateur doit créer une variable d'appartenance à une métropole et reprendre le principe de notre ligne de code ci-dessous.
-On souhaite qu'en donnant une proportion
+Si l'utilisateur souhaite supprimer certaines communes de l'enquête, il est aussi possible de définir la zone manuellement pour être sûr d'avoir un bloc d'absence de répondants.
 
-```{r}
+Le tirage à deux degrés, nous a justement permis d'automatiser en prenant un certain nombre de communes voisines ne se trouvant pas en métropole ou dans d'autres zones souhaitées. L'option manuelle est à 
+
+Si c'est ce que l'on souhaite, l'utilisateur doit créer une variable d'appartenance à une métropole et reprendre le principe de notre ligne de code ci-dessous.
+
+
+```{r, results=FALSE}
 # Remplacer la variable inclusion_enquete à 0 pour certains
 donnees$inclusion_enquete <- ifelse(donnees$ID %in% c(43,44,45,52,53,54,61,62,63,77,78,79), 0, donnees$inclusion_enquete)
 ```
 
+```{r,eval =FALSE}
+
+# Proportion des communes exempts de répondants à l'enquête
+taux_absence_enquete_commune <- 0.5
+
+# Nombre d'unités primaires à tirer déduites du pourcentage de communes sans répondants
+n_up_sample <- floor((1-taux_absence_enquete_commune)*n_squares)
+
+# Tirage des unités primaires au hasard
+up_sample <- sample(unique(donnees$ID), n_up_sample)
+
+# Indicatrice de sélection des individus associés aux ID de communes sélectionnées dans up_sample
+donnees$inclusion_enquete_up <- ifelse(donnees$ID %in% up_sample,1,0)
+
+# Sous-échantillonnage des unités secondaires pour chaque unité primaire sélectionnée
+# Effectuer le tirage de Bernoulli selon les données de contexte pour chaque carré
+donnees$inclusion_enquete <- ifelse(donnees$inclusion_enquete_up==1,rbinom(nrow(donnees), 1, donnees$donnee_contexte_commune),0)
+
+
+
+```
 
 #### Visualisation des enquêtés selectionnés sur le territoire
 
@@ -347,10 +357,22 @@ head(donnees_agg)
 
 ## Observation du lien entre données de contexte et nombre de répondants
 
-Nous avons une structure des données de contexte qui affecte positivement avec le nombre de répondants. Observe t-on une corrélation entre les données de contexte et le nombre de répondants ?
+Nous avons une structure des données de contexte qui affecte positivement le nombre de répondants. Observe t-on une tendance positive entre les données de contexte et le nombre de répondants ? 
 
 ```{r}
-plot(donnees_agg$nb_repondants_commune,donnees_agg$donnee_contexte_commune)
+plot(donnees_agg$nb_repondants_commune,donnees_agg$donnee_contexte_commune, main="Scatterplot du lien entre données de contexte et nombre de répondants", sub="Constatation de la corrélation",
+  xlab="Nombre de répondants", ylab="Valeurs des données de contexte")
+```
+La tendance ne semble peut-être pas purement linéaire mais nous constatons une tendance relativement positive.
+
+Pour évaluer la force de la corrélation, nous effectuons une régression linéaire entre ces deux variables.  (si par commune, régression par pallier ??
+
+```{r}
+reg<-lm(donnees_agg$donnee_contexte_commune ~ donnees_agg$nb_repondants_commune)
+plot(donnees_agg$nb_repondants_commune,donnees_agg$donnee_contexte_commune, main="Scatterplot du lien entre données de contexte et nombre de répondants", sub="Constatation de la corrélation",
+  xlab="Nombre de répondants", ylab="Valeurs des données de contexte")
+abline(reg, col = "red") 
+summary(reg)
 ```
 
 
@@ -687,7 +709,7 @@ inertie_prec = Inf
 #Fixation de l'état de convergence à FALSE tant que le processus d'agrégation ne se termine pas
 convergence = FALSE
 #choix de la fonction de distance à appliquer
-fonction_distance <- distance_euclidienne_ponderee #distance_Ward.D2_ponderee #
+fonction_distance <- distance_Ward.D2_ponderee #distance_euclidienne_ponderee 
 ```
 
 Le processus d'agrégation s'arrête plus vite avec une distance euclidienne pondérée plutôt que Ward.D2 pondérée
