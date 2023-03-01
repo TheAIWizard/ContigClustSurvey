@@ -969,9 +969,8 @@ ggplot(df, aes(x = x_bin, y = y_bin, fill = as.factor(clusters))) +
   geom_tile(color = "black",width = 0.95, height = 0.95) +
   scale_fill_manual(values = color) +
   theme_void() 
-  
+  #+guides(fill = FALSE) + # désactiver la légende de remplissage
   ggtitle("CAH avec contraintes de contiguité et nombre de répondants")
-ggsave("Dataviz_CAH_Ward")
   
 ```
 
